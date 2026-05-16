@@ -1,0 +1,63 @@
+<div class="page-header">
+  <h2><%= customer ? 'Kunde bearbeiten' : 'Neuer Kunde' %></h2>
+  <a href="/kunden" class="btn-secondary">← Zurück</a>
+</div>
+
+<form action="<%= customer ? '/kunden/' + customer.id + '/bearbeiten' : '/kunden/neu' %>" method="POST">
+  <div class="card">
+    <h3 class="card-title">Allgemein</h3>
+    <div class="form-group" style="max-width:400px">
+      <label>Firmenname <span class="required">*</span></label>
+      <input type="text" name="name" value="<%= customer ? customer.name : '' %>" required />
+    </div>
+    <div class="form-group" style="max-width:400px">
+      <label>Kostenstellen-Nr.</label>
+      <input type="text" name="cost_center" value="<%= customer ? customer.cost_center : '' %>" placeholder="z.B. GS Berlin  1010102002" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Rechnungsadresse</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Straße + Nr.</label>
+        <input type="text" name="billing_street" value="<%= customer ? customer.billing_street : '' %>" />
+      </div>
+      <div class="form-group">
+        <label>PLZ</label>
+        <input type="text" name="billing_zip" value="<%= customer ? customer.billing_zip : '' %>" style="max-width:120px" />
+      </div>
+      <div class="form-group">
+        <label>Stadt</label>
+        <input type="text" name="billing_city" value="<%= customer ? customer.billing_city : '' %>" />
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Lieferadresse</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Ansprechpartner</label>
+        <input type="text" name="delivery_contact" value="<%= customer ? customer.delivery_contact : '' %>" placeholder="z.B. Charlotte Wieland" />
+      </div>
+      <div class="form-group">
+        <label>Straße + Nr.</label>
+        <input type="text" name="delivery_street" value="<%= customer ? customer.delivery_street : '' %>" />
+      </div>
+      <div class="form-group">
+        <label>PLZ</label>
+        <input type="text" name="delivery_zip" value="<%= customer ? customer.delivery_zip : '' %>" style="max-width:120px" />
+      </div>
+      <div class="form-group">
+        <label>Stadt</label>
+        <input type="text" name="delivery_city" value="<%= customer ? customer.delivery_city : '' %>" />
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:40px">
+    <button type="submit" class="btn-primary"><%= customer ? 'Änderungen speichern' : 'Kunde anlegen' %></button>
+    <a href="/kunden" class="btn-secondary">Abbrechen</a>
+  </div>
+</form>

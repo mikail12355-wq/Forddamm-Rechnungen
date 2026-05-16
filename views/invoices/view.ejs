@@ -1,0 +1,121 @@
+<div class="page-header">
+  <h2>Rechnung Nr. <%= invoice.invoice_number %></h2>
+  <div style="display:flex;gap:8px">
+    <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
+    <a href="/rechnungen/<%= invoice.id %>/bearbeiten" class="btn-secondary">Bearbeiten</a>
+    <a href="/rechnungen" class="btn-ghost">← Zurück</a>
+  </div>
+</div>
+
+<div class="invoice-preview">
+  <!-- Header -->
+  <div class="inv-header">
+    <div></div>
+    <div class="inv-company">
+      <div class="inv-company-name">Bäckerei Forddamm</div>
+      <div>Murat Öztürk</div>
+      <div>Forddamm 13</div>
+      <div>12107 Berlin</div>
+    </div>
+  </div>
+
+  <!-- Addresses -->
+  <div class="inv-addresses">
+    <div>
+      <div class="inv-label">Rechnungsadresse:</div>
+      <div>An</div>
+      <div><strong><%= invoice.customer_name %></strong></div>
+      <% if (invoice.billing_street) { %><div><%= invoice.billing_street %></div><% } %>
+      <% if (invoice.billing_zip || invoice.billing_city) { %><div><%= invoice.billing_zip %> <%= invoice.billing_city %></div><% } %>
+    </div>
+    <div>
+      <div class="inv-label">Lieferadresse:</div>
+      <div>An</div>
+      <div><strong><%= invoice.customer_name %></strong></div>
+      <% if (invoice.delivery_contact) { %><div><%= invoice.delivery_contact %></div><% } %>
+      <% if (invoice.delivery_street) { %><div><%= invoice.delivery_street %></div><% } %>
+      <% if (invoice.delivery_zip || invoice.delivery_city) { %><div><%= invoice.delivery_zip %> <%= invoice.delivery_city %></div><% } %>
+    </div>
+    <div>
+      <% if (invoice.order_number) { %>
+        <div class="inv-label">Bestellung: <%= invoice.order_number %></div>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (invoice.cost_center) { %>
+  <div class="inv-costcenter">KostenstelleNr.<%= invoice.cost_center %></div>
+  <% } %>
+
+  <!-- Meta -->
+  <div class="inv-meta">
+    <div>
+      <span class="inv-label">Lieferdatum:</span>
+      <% if (invoice.delivery_from) { %>
+        <span><%= new Date(invoice.delivery_from).toLocaleDateString('de-DE') %></span>
+        <% if (invoice.delivery_to) { %>–<span><%= new Date(invoice.delivery_to).toLocaleDateString('de-DE') %></span><% } %>
+      <% } %>
+    </div>
+    <div>
+      <span class="inv-label">Rechnung Nr.</span> <strong><%= invoice.invoice_number %></strong>
+      &nbsp;&nbsp;&nbsp;
+      <span class="inv-label">Datum:</span> <span><%= new Date(invoice.date).toLocaleDateString('de-DE') %></span>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>Artikel</th>
+        <th style="text-align:center">Menge</th>
+        <th style="text-align:right">Einzelpreis, netto</th>
+        <th style="text-align:right">Gesamtpreis, netto</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% items.forEach(item => { %>
+      <tr>
+        <td><%= item.article_name %></td>
+        <td style="text-align:center"><%= item.quantity %></td>
+        <td style="text-align:right"><%= item.unit_price.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right"><%= (item.quantity * item.unit_price).toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <% }) %>
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3">Gesamtbetrag, netto</td>
+        <td style="text-align:right"><%= totalNetto.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="3">+ 7% USt</td>
+        <td style="text-align:right"><%= ust.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <tr class="total-row total-final">
+        <td colspan="3">Gesamtbetrag, brutto</td>
+        <td style="text-align:right"><%= totalBrutto.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Payment -->
+  <div class="inv-payment">
+    <p>Bitte Überweisen Sie den gesamten Betrag auf folgendes Konto:</p>
+    <table>
+      <tr><td>BIC</td><td>BELADEBXXX</td></tr>
+      <tr><td>IBAN</td><td>DE67 1005 0000 0191 3708 27</td></tr>
+      <tr><td>Inhaber:</td><td>Murat Öztürk</td></tr>
+    </table>
+    <p><strong>Zahlungsart:</strong> Überweisung</p>
+  </div>
+
+  <div class="inv-footer">SteuerNr.20/460/01995</div>
+</div>
+
+<div style="margin-top:16px;padding-bottom:40px;display:flex;gap:8px">
+  <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
+  <form action="/rechnungen/<%= invoice.id %>/loeschen" method="POST" onsubmit="return confirm('Rechnung wirklich löschen?')">
+    <button type="submit" class="btn-danger">Rechnung löschen</button>
+  </form>
+</div>

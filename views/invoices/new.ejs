@@ -1,0 +1,99 @@
+<div class="page-header">
+  <h2><%= editInvoice ? 'Rechnung bearbeiten' : 'Neue Rechnung' %></h2>
+  <a href="/rechnungen" class="btn-secondary">← Zurück</a>
+</div>
+
+<form action="<%= editInvoice ? '/rechnungen/' + editInvoice.id + '/bearbeiten' : '/rechnungen/neu' %>" method="POST" id="invoice-form">
+
+  <!-- META -->
+  <div class="card">
+    <h3 class="card-title">Rechnungsdaten</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Rechnung Nr. <span class="required">*</span></label>
+        <input type="number" name="invoice_number" value="<%= editInvoice ? editInvoice.invoice_number : nextNumber %>" required min="1" />
+      </div>
+      <div class="form-group">
+        <label>Datum <span class="required">*</span></label>
+        <input type="date" name="date" value="<%= editInvoice ? editInvoice.date.split('T')[0] : today %>" required />
+      </div>
+      <div class="form-group">
+        <label>Lieferdatum von</label>
+        <input type="date" name="delivery_from" value="<%= editInvoice && editInvoice.delivery_from ? editInvoice.delivery_from.split('T')[0] : '' %>" />
+      </div>
+      <div class="form-group">
+        <label>Lieferdatum bis</label>
+        <input type="date" name="delivery_to" value="<%= editInvoice && editInvoice.delivery_to ? editInvoice.delivery_to.split('T')[0] : '' %>" />
+      </div>
+      <div class="form-group">
+        <label>Bestellnummer</label>
+        <input type="text" name="order_number" value="<%= editInvoice ? editInvoice.order_number : '' %>" placeholder="z.B. 4500045353" />
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOMER -->
+  <div class="card">
+    <h3 class="card-title">Kunde <span class="required">*</span></h3>
+    <div class="form-group" style="max-width:380px">
+      <label>Kunde auswählen</label>
+      <select name="customer_id" id="customer-select" required>
+        <option value="">— Bitte wählen —</option>
+        <% customers.forEach(c => { %>
+          <option value="<%= c.id %>"
+            data-billing="<%= c.billing_street %>, <%= c.billing_zip %> <%= c.billing_city %>"
+            data-delivery="<%= c.delivery_contact ? c.delivery_contact + ', ' : '' %><%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
+            data-costcenter="<%= c.cost_center %>"
+            <%= (editInvoice && editInvoice.customer_id == c.id) ? 'selected' : '' %>>
+            <%= c.name %>
+          </option>
+        <% }) %>
+      </select>
+    </div>
+    <div id="customer-preview" class="customer-preview" style="display:none">
+      <div><strong>Rechnungsadresse:</strong> <span id="preview-billing"></span></div>
+      <div><strong>Lieferadresse:</strong> <span id="preview-delivery"></span></div>
+      <div id="preview-costcenter-row"><strong>Kostenstelle:</strong> <span id="preview-costcenter"></span></div>
+    </div>
+    <a href="/kunden/neu" target="_blank" class="link" style="font-size:0.85rem">+ Neuen Kunden anlegen</a>
+  </div>
+
+  <!-- ITEMS -->
+  <div class="card">
+    <h3 class="card-title">Artikel</h3>
+
+    <div id="items-container">
+      <div class="items-header">
+        <span>Artikel</span><span>Menge</span><span>Einzelpreis (netto)</span><span>Gesamt</span><span></span>
+      </div>
+      <!-- Rows injected by JS, seeded from server data -->
+    </div>
+
+    <button type="button" id="add-row" class="btn-ghost" style="margin-top:12px">+ Artikel hinzufügen</button>
+
+    <div class="totals-preview">
+      <div class="totals-row"><span>Gesamtbetrag netto</span><span id="total-netto">0,00 €</span></div>
+      <div class="totals-row"><span>+ 7% USt</span><span id="total-ust">0,00 €</span></div>
+      <div class="totals-row totals-final"><span>Gesamtbetrag brutto</span><span id="total-brutto">0,00 €</span></div>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="card">
+    <h3 class="card-title">Notizen (intern)</h3>
+    <textarea name="notes" rows="3" placeholder="Interne Notiz, wird nicht auf der Rechnung angezeigt …"><%= editInvoice ? editInvoice.notes : '' %></textarea>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:40px">
+    <button type="submit" class="btn-primary btn-lg">
+      <%= editInvoice ? 'Änderungen speichern' : 'Rechnung erstellen' %>
+    </button>
+    <a href="/rechnungen" class="btn-secondary btn-lg">Abbrechen</a>
+  </div>
+</form>
+
+<script>
+// Seed articles for JS usage
+const ARTICLES = <%- JSON.stringify(articles.map(a => ({ id: a.id, name: a.name, price: a.unit_price }))) %>;
+const SEED_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
+</script>

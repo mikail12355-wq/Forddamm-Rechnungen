@@ -1,0 +1,63 @@
+<div class="page-header">
+  <h2>Rechnungen</h2>
+  <a href="/rechnungen/neu" class="btn-primary">+ Neue Rechnung</a>
+</div>
+
+<div class="card">
+  <form class="search-bar" method="GET" action="/rechnungen">
+    <input type="text" name="search" placeholder="Suche nach Nr., Kunde, Bestellnr. …" value="<%= search %>" />
+    <select name="sort">
+      <option value="desc" <%= sort==='desc'?'selected':'' %>>Neueste zuerst</option>
+      <option value="asc"  <%= sort==='asc'?'selected':'' %>>Älteste zuerst</option>
+    </select>
+    <button type="submit" class="btn-secondary">Suchen</button>
+    <% if (search) { %><a href="/rechnungen" class="btn-ghost">Zurücksetzen</a><% } %>
+  </form>
+
+  <% if (invoices.length === 0) { %>
+    <p class="empty-state">Keine Rechnungen gefunden.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Nr.</th>
+        <th>Datum</th>
+        <th>Lieferdatum</th>
+        <th>Kunde</th>
+        <th>Bestellnr.</th>
+        <th>Netto</th>
+        <th>Brutto</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% invoices.forEach(inv => {
+        const netto = inv.total_netto || 0;
+        const brutto = netto * 1.07;
+      %>
+      <tr>
+        <td><strong>#<%= inv.invoice_number %></strong></td>
+        <td><%= new Date(inv.date).toLocaleDateString('de-DE') %></td>
+        <td>
+          <% if (inv.delivery_from) { %>
+            <%= new Date(inv.delivery_from).toLocaleDateString('de-DE') %>
+            <% if (inv.delivery_to) { %>–<%= new Date(inv.delivery_to).toLocaleDateString('de-DE') %><% } %>
+          <% } else { %>—<% } %>
+        </td>
+        <td><%= inv.customer_name || '—' %></td>
+        <td class="text-muted"><%= inv.order_number || '—' %></td>
+        <td><%= netto.toFixed(2).replace('.',',') %> €</td>
+        <td><strong><%= brutto.toFixed(2).replace('.',',') %> €</strong></td>
+        <td>
+          <div class="action-links">
+            <a href="/rechnungen/<%= inv.id %>">Ansehen</a>
+            <a href="/rechnungen/<%= inv.id %>/pdf">PDF</a>
+            <a href="/rechnungen/<%= inv.id %>/bearbeiten">Bearbeiten</a>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</div>

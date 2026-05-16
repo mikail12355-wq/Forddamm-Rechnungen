@@ -1,0 +1,61 @@
+<div class="page-header">
+  <h2>Dashboard</h2>
+  <a href="/rechnungen/neu" class="btn-primary">+ Neue Rechnung</a>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.invoices %></div>
+    <div class="stat-label">Rechnungen gesamt</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.customers %></div>
+    <div class="stat-label">Kunden</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.articles %></div>
+    <div class="stat-label">Artikel</div>
+  </div>
+  <div class="stat-card accent">
+    <div class="stat-value"><%= stats.revenue.toFixed(2).replace('.', ',') %> €</div>
+    <div class="stat-label">Gesamtumsatz netto</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3>Letzte Rechnungen</h3>
+    <a href="/rechnungen" class="link">Alle anzeigen →</a>
+  </div>
+  <% if (latestInvoices.length === 0) { %>
+    <p class="empty-state">Noch keine Rechnungen vorhanden. <a href="/rechnungen/neu">Erste Rechnung erstellen</a></p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Nr.</th>
+        <th>Datum</th>
+        <th>Kunde</th>
+        <th>Betrag netto</th>
+        <th>Betrag brutto</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% latestInvoices.forEach(inv => {
+        const netto = inv.total_netto || 0;
+        const brutto = netto * 1.07;
+      %>
+      <tr>
+        <td><strong>#<%= inv.invoice_number %></strong></td>
+        <td><%= new Date(inv.date).toLocaleDateString('de-DE') %></td>
+        <td><%= inv.customer_name || '—' %></td>
+        <td><%= netto.toFixed(2).replace('.',',') %> €</td>
+        <td><strong><%= brutto.toFixed(2).replace('.',',') %> €</strong></td>
+        <td><a href="/rechnungen/<%= inv.id %>" class="link">Öffnen →</a></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</div>

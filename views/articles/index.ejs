@@ -1,0 +1,38 @@
+<div class="page-header">
+  <h2>Artikel</h2>
+  <a href="/artikel/neu" class="btn-primary">+ Neuer Artikel</a>
+</div>
+
+<div class="card">
+  <% if (articles.length === 0) { %>
+    <p class="empty-state">Noch keine Artikel angelegt. <a href="/artikel/neu">Ersten Artikel anlegen</a></p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Artikel</th>
+        <th>Einzelpreis netto</th>
+        <th>Status</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% articles.forEach(a => { %>
+      <tr>
+        <td><strong><%= a.name %></strong></td>
+        <td><%= a.unit_price.toFixed(2).replace('.',',') %> €</td>
+        <td><span class="badge <%= a.active ? 'badge-green' : 'badge-gray' %>"><%= a.active ? 'Aktiv' : 'Inaktiv' %></span></td>
+        <td>
+          <div class="action-links">
+            <a href="/artikel/<%= a.id %>/bearbeiten">Bearbeiten</a>
+            <form action="/artikel/<%= a.id %>/loeschen" method="POST" style="display:inline" onsubmit="return confirm('Artikel wirklich löschen?')">
+              <button type="submit" class="link-danger">Löschen</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</div>
