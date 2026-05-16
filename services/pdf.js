@@ -91,15 +91,15 @@ function generatePDF(invoice, items, stream) {
   y += 20;
 
   // ── TABLE ─────────────────────────────────────────────────────────────────
-  // Column x positions
-  const tA = mL;          // Artikel
-  const tM = mL + 275;    // Menge
-  const tE = mL + 335;    // Einzelpreis netto
-  const tG = mL + 420;    // Gesamtpreis netto
-  const tRight = mL + cW;
+  // Spaltenbreiten: Artikel 225pt, Menge 50pt, Einzelpreis 110pt, Gesamtpreis 110pt = 495pt
+  const tA = mL;           // Artikel   x=50
+  const tM = mL + 225;     // Menge     x=275
+  const tE = mL + 275;     // Einzelpreis netto x=325
+  const tG = mL + 385;     // Gesamtpreis netto x=435
+  const tRight = mL + cW;  // x=545
 
-  const rowH = 17;
-  const colWidths = { a: 275, m: 60, e: 85, g: 75 };
+  const rowH = 18;
+  const colWidths = { a: 225, m: 50, e: 110, g: 110 };
 
   const drawRowBorder = (rowY) => {
     doc.rect(tA, rowY, cW, rowH).stroke('#999');
@@ -111,23 +111,23 @@ function generatePDF(invoice, items, stream) {
   // Header row
   drawRowBorder(y);
   doc.font('Helvetica-Bold').fontSize(8.5);
-  doc.text('Artikel',            tA + 3, y + 4, { width: colWidths.a });
-  doc.text('Menge',              tM + 3, y + 4, { width: colWidths.m });
-  doc.text('Einzelpreis, netto', tE + 3, y + 4, { width: colWidths.e });
-  doc.text('Gesamtpreis, netto', tG + 3, y + 4, { width: colWidths.g });
+  doc.text('Artikel',            tA + 4, y + 5, { width: colWidths.a - 4, lineBreak: false });
+  doc.text('Menge',              tM + 4, y + 5, { width: colWidths.m - 4, lineBreak: false });
+  doc.text('Einzelpreis, netto', tE + 4, y + 5, { width: colWidths.e - 4, lineBreak: false });
+  doc.text('Gesamtpreis, netto', tG + 4, y + 5, { width: colWidths.g - 6, lineBreak: false });
   y += rowH;
 
   // Item rows
   doc.font('Helvetica').fontSize(8.5);
   let totalNetto = 0;
   for (const item of items) {
-    const rowTotal = item.quantity * item.unit_price;
+    const rowTotal = Number(item.quantity) * Number(item.unit_price);
     totalNetto += rowTotal;
     drawRowBorder(y);
-    doc.text(item.article_name,       tA + 3, y + 4, { width: colWidths.a });
-    doc.text(String(item.quantity),   tM + 3, y + 4, { width: colWidths.m });
-    doc.text(EUR(item.unit_price),    tE + 3, y + 4, { width: colWidths.e, align: 'right' });
-    doc.text(EUR(rowTotal),           tG + 3, y + 4, { width: colWidths.g - 5, align: 'right' });
+    doc.text(String(item.article_name),    tA + 4, y + 5, { width: colWidths.a - 6,  lineBreak: false });
+    doc.text(String(item.quantity),        tM + 4, y + 5, { width: colWidths.m - 4,  lineBreak: false });
+    doc.text(EUR(Number(item.unit_price)), tE + 4, y + 5, { width: colWidths.e - 8,  align: 'right', lineBreak: false });
+    doc.text(EUR(rowTotal),                tG + 4, y + 5, { width: colWidths.g - 10, align: 'right', lineBreak: false });
     y += rowH;
   }
 
@@ -139,16 +139,16 @@ function generatePDF(invoice, items, stream) {
   const totalBrutto = totalNetto + ust;
 
   const totalRows = [
-    { label: 'Gesamtbetrag, netto', value: EUR(totalNetto), bold: false },
-    { label: '+ 7% USt',            value: EUR(ust),        bold: false },
-    { label: 'Gesamtbetrag, brutto', value: EUR(totalBrutto), bold: true },
+    { label: 'Gesamtbetrag, netto',  value: EUR(totalNetto),   bold: false },
+    { label: '+ 7% USt',             value: EUR(ust),          bold: false },
+    { label: 'Gesamtbetrag, brutto', value: EUR(totalBrutto),  bold: true  },
   ];
 
   for (const row of totalRows) {
     drawRowBorder(y);
     doc.font(row.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8.5);
-    doc.text(row.label, tE + 3, y + 4, { width: colWidths.e });
-    doc.text(row.value, tG + 3, y + 4, { width: colWidths.g - 5, align: 'right' });
+    doc.text(row.label, tE + 4, y + 5, { width: colWidths.e - 8,  lineBreak: false });
+    doc.text(row.value, tG + 4, y + 5, { width: colWidths.g - 10, align: 'right', lineBreak: false });
     y += rowH;
   }
 
