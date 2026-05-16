@@ -1,185 +1,180 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search, sort = 'desc' } = req.query;
   const order = sort === 'asc' ? 'ASC' : 'DESC';
 
-  let query = `
-    SELECT i.*, c.name as customer_name,
+  let sql = `
+    SELECT i.id, i.invoice_number, i.date, i.delivery_from, i.delivery_to, i.order_number,
+      c.name as customer_name,
       (SELECT SUM(ii.quantity * ii.unit_price) FROM invoice_items ii WHERE ii.invoice_id = i.id) as total_netto
-    FROM invoices i
-    LEFT JOIN customers c ON c.id = i.customer_id
+    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
   `;
-  const params = [];
+  const args = [];
 
   if (search) {
-    query += ` WHERE (CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)`;
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    sql += ` WHERE (CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)`;
+    args.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
+  sql += ` ORDER BY i.invoice_number ${order}`;
 
-  query += ` ORDER BY i.invoice_number ${order}`;
-
-  const invoices = db.prepare(query).all(...params);
-  res.render('invoices/index', { title: 'Rechnungen', invoices, search: search || '', sort });
+  const result = await db.execute(sql, args);
+  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort });
 });
 
-router.get('/neu', (req, res) => {
-  const customers = db.prepare('SELECT * FROM customers ORDER BY name').all();
-  const articles = db.prepare('SELECT * FROM articles WHERE active = 1 ORDER BY name').all();
-  const lastInvoice = db.prepare('SELECT MAX(invoice_number) as max FROM invoices').get();
-  const nextNumber = (lastInvoice.max || 247) + 1;
+router.get('/neu', async (req, res) => {
+  const [custRes, artRes, lastRes] = await Promise.all([
+    db.execute('SELECT * FROM customers ORDER BY name'),
+    db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
+    db.execute('SELECT MAX(invoice_number) as max FROM invoices')
+  ]);
+  const nextNumber = (Number(lastRes.rows[0].max) || 247) + 1;
   const today = new Date().toISOString().split('T')[0];
-
-  res.render('invoices/new', { title: 'Neue Rechnung', customers, articles, nextNumber, today, editInvoice: null });
+  res.render('invoices/new', { title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows, nextNumber, today, editInvoice: null, editItems: [] });
 });
 
-router.post('/neu', (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes,
-          item_name, item_qty, item_price } = req.body;
+router.post('/neu', async (req, res) => {
+  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, item_name, item_qty, item_price } = req.body;
 
   if (!invoice_number || !date || !customer_id) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
     return res.redirect('/rechnungen/neu');
   }
 
-  const existing = db.prepare('SELECT id FROM invoices WHERE invoice_number = ?').get(+invoice_number);
-  if (existing) {
+  const existing = await db.execute('SELECT id FROM invoices WHERE invoice_number = ?', [+invoice_number]);
+  if (existing.rows[0]) {
     req.flash('error', `Rechnung Nr. ${invoice_number} existiert bereits.`);
     return res.redirect('/rechnungen/neu');
   }
 
-  const names = Array.isArray(item_name) ? item_name : [item_name];
-  const qtys  = Array.isArray(item_qty)  ? item_qty  : [item_qty];
-  const prices = Array.isArray(item_price) ? item_price : [item_price];
-
-  const validItems = names.map((n, i) => ({
-    name: n?.trim(),
-    qty: parseFloat(qtys[i]) || 0,
-    price: parseFloat(String(prices[i]).replace(',', '.')) || 0
-  })).filter(it => it.name && it.qty > 0 && it.price > 0);
-
-  if (validItems.length === 0) {
+  const validItems = parseItems(item_name, item_qty, item_price);
+  if (!validItems.length) {
     req.flash('error', 'Mindestens ein Artikel mit Menge und Preis erforderlich.');
     return res.redirect('/rechnungen/neu');
   }
 
-  const createInvoice = db.transaction(() => {
-    const result = db.prepare(`
-      INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '');
+  const invRes = await db.execute(
+    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '']
+  );
+  const invoiceId = Number(invRes.lastInsertRowid);
 
-    const invoiceId = result.lastInsertRowid;
-    const insertItem = db.prepare(`
-      INSERT INTO invoice_items (invoice_id, article_name, quantity, unit_price, sort_order)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    validItems.forEach((item, idx) => insertItem.run(invoiceId, item.name, item.qty, item.price, idx));
-    return invoiceId;
-  });
+  for (let i = 0; i < validItems.length; i++) {
+    const it = validItems[i];
+    await db.execute(
+      'INSERT INTO invoice_items (invoice_id, article_name, quantity, unit_price, sort_order) VALUES (?, ?, ?, ?, ?)',
+      [invoiceId, it.name, it.qty, it.price, i]
+    );
+  }
 
-  const invoiceId = createInvoice();
   req.flash('success', `Rechnung Nr. ${invoice_number} wurde erstellt.`);
   res.redirect(`/rechnungen/${invoiceId}`);
 });
 
-router.get('/:id', (req, res) => {
-  const invoice = db.prepare(`
+router.get('/:id', async (req, res) => {
+  const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_contact, c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
-    FROM invoices i
-    LEFT JOIN customers c ON c.id = i.customer_id
-    WHERE i.id = ?
-  `).get(req.params.id);
+    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
+  `, [+req.params.id]);
 
+  const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
 
-  const items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').all(invoice.id);
-  const totalNetto = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const itemsRes = await db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]);
+  const items = itemsRes.rows;
+  const totalNetto = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
   const ust = totalNetto * 0.07;
 
-  res.render('invoices/view', {
-    title: `Rechnung Nr. ${invoice.invoice_number}`,
-    invoice, items, totalNetto, ust, totalBrutto: totalNetto + ust
-  });
+  res.render('invoices/view', { title: `Rechnung Nr. ${invoice.invoice_number}`, invoice, items, totalNetto, ust, totalBrutto: totalNetto + ust });
 });
 
-router.get('/:id/pdf', (req, res) => {
-  const invoice = db.prepare(`
+router.get('/:id/pdf', async (req, res) => {
+  const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_contact, c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
-    FROM invoices i
-    LEFT JOIN customers c ON c.id = i.customer_id
-    WHERE i.id = ?
-  `).get(req.params.id);
+    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
+  `, [+req.params.id]);
 
+  const invoice = invRes.rows[0];
   if (!invoice) return res.status(404).send('Rechnung nicht gefunden');
 
-  const items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').all(invoice.id);
+  const itemsRes = await db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=Rechnung-${invoice.invoice_number}.pdf`);
-  generatePDF(invoice, items, res);
+  generatePDF(invoice, itemsRes.rows, res);
 });
 
-router.get('/:id/bearbeiten', (req, res) => {
-  const invoice = db.prepare(`
+router.get('/:id/bearbeiten', async (req, res) => {
+  const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
-  `).get(req.params.id);
+  `, [+req.params.id]);
+  const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
 
-  const items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').all(invoice.id);
-  const customers = db.prepare('SELECT * FROM customers ORDER BY name').all();
-  const articles = db.prepare('SELECT * FROM articles WHERE active = 1 ORDER BY name').all();
+  const [custRes, artRes, itemsRes] = await Promise.all([
+    db.execute('SELECT * FROM customers ORDER BY name'),
+    db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
+    db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id])
+  ]);
 
-  res.render('invoices/new', { title: `Rechnung bearbeiten`, customers, articles, nextNumber: invoice.invoice_number, today: invoice.date, editInvoice: invoice, editItems: items });
+  res.render('invoices/new', {
+    title: 'Rechnung bearbeiten', customers: custRes.rows, articles: artRes.rows,
+    nextNumber: invoice.invoice_number, today: invoice.date,
+    editInvoice: invoice, editItems: itemsRes.rows
+  });
 });
 
-router.post('/:id/bearbeiten', (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes,
-          item_name, item_qty, item_price } = req.body;
+router.post('/:id/bearbeiten', async (req, res) => {
+  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, item_name, item_qty, item_price } = req.body;
 
-  const names  = Array.isArray(item_name)  ? item_name  : [item_name];
-  const qtys   = Array.isArray(item_qty)   ? item_qty   : [item_qty];
-  const prices = Array.isArray(item_price) ? item_price : [item_price];
-
-  const validItems = names.map((n, i) => ({
-    name: n?.trim(),
-    qty: parseFloat(qtys[i]) || 0,
-    price: parseFloat(String(prices[i]).replace(',', '.')) || 0
-  })).filter(it => it.name && it.qty > 0 && it.price > 0);
-
-  if (validItems.length === 0) {
+  const validItems = parseItems(item_name, item_qty, item_price);
+  if (!validItems.length) {
     req.flash('error', 'Mindestens ein Artikel mit Menge und Preis erforderlich.');
     return res.redirect(`/rechnungen/${req.params.id}/bearbeiten`);
   }
 
-  const update = db.transaction(() => {
-    db.prepare(`
-      UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?,
-        customer_id=?, order_number=?, notes=? WHERE id=?
-    `).run(+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', +req.params.id);
+  await db.execute(
+    `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?, customer_id=?, order_number=?, notes=? WHERE id=?`,
+    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', +req.params.id]
+  );
+  await db.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [+req.params.id]);
 
-    db.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').run(+req.params.id);
-    const ins = db.prepare('INSERT INTO invoice_items (invoice_id, article_name, quantity, unit_price, sort_order) VALUES (?, ?, ?, ?, ?)');
-    validItems.forEach((it, idx) => ins.run(+req.params.id, it.name, it.qty, it.price, idx));
-  });
+  for (let i = 0; i < validItems.length; i++) {
+    const it = validItems[i];
+    await db.execute(
+      'INSERT INTO invoice_items (invoice_id, article_name, quantity, unit_price, sort_order) VALUES (?, ?, ?, ?, ?)',
+      [+req.params.id, it.name, it.qty, it.price, i]
+    );
+  }
 
-  update();
   req.flash('success', `Rechnung Nr. ${invoice_number} aktualisiert.`);
   res.redirect(`/rechnungen/${req.params.id}`);
 });
 
-router.post('/:id/loeschen', (req, res) => {
-  const invoice = db.prepare('SELECT invoice_number FROM invoices WHERE id = ?').get(req.params.id);
+router.post('/:id/loeschen', async (req, res) => {
+  const invRes = await db.execute('SELECT invoice_number FROM invoices WHERE id = ?', [+req.params.id]);
+  const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
-  db.prepare('DELETE FROM invoices WHERE id = ?').run(+req.params.id);
+  await db.execute('DELETE FROM invoices WHERE id = ?', [+req.params.id]);
   req.flash('success', `Rechnung Nr. ${invoice.invoice_number} gelöscht.`);
   res.redirect('/rechnungen');
 });
+
+function parseItems(item_name, item_qty, item_price) {
+  const names  = Array.isArray(item_name)  ? item_name  : [item_name];
+  const qtys   = Array.isArray(item_qty)   ? item_qty   : [item_qty];
+  const prices = Array.isArray(item_price) ? item_price : [item_price];
+  return names.map((n, i) => ({
+    name:  n?.trim(),
+    qty:   parseFloat(qtys[i])  || 0,
+    price: parseFloat(String(prices[i]).replace(',', '.')) || 0
+  })).filter(it => it.name && it.qty > 0 && it.price > 0);
+}
 
 module.exports = router;

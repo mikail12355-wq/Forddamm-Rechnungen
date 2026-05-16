@@ -1,23 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const db = require('../db');
+const { db } = require('../db');
 
 router.get('/login', (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
   res.render('login', { title: 'Anmelden', layout: false });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+  const user = result.rows[0];
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     req.flash('error', 'Benutzername oder Passwort falsch.');
     return res.redirect('/login');
   }
 
-  req.session.user = { id: user.id, username: user.username };
+  req.session.user = { id: Number(user.id), username: user.username };
   res.redirect('/dashboard');
 });
 
@@ -27,14 +28,16 @@ router.post('/logout', (req, res) => {
 
 router.get('/passwort', (req, res) => {
   if (!req.session.user) return res.redirect('/login');
-  res.render('password', { title: 'Passwort ändern', layout: 'layout' });
+  res.render('password', { title: 'Passwort ändern' });
 });
 
-router.post('/passwort', (req, res) => {
+router.post('/passwort', async (req, res) => {
   if (!req.session.user) return res.redirect('/login');
   const { current, newpass, confirm } = req.body;
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const result = await db.execute('SELECT * FROM users WHERE id = ?', [req.session.user.id]);
+  const user = result.rows[0];
+
   if (!bcrypt.compareSync(current, user.password_hash)) {
     req.flash('error', 'Aktuelles Passwort falsch.');
     return res.redirect('/passwort');
@@ -49,7 +52,7 @@ router.post('/passwort', (req, res) => {
   }
 
   const hash = bcrypt.hashSync(newpass, 10);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
+  await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
   req.flash('success', 'Passwort erfolgreich geändert.');
   res.redirect('/dashboard');
 });

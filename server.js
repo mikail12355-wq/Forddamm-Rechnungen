@@ -4,6 +4,7 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const ejsLayouts = require('express-ejs-layouts');
 const path = require('path');
+const { initDB } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,6 +49,11 @@ app.get('/', (req, res) => {
   res.redirect('/login');
 });
 
-app.listen(PORT, () => {
-  console.log(`Forddamm Rechnungssystem läuft auf http://localhost:${PORT}`);
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Forddamm Rechnungssystem läuft auf http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Datenbankfehler beim Start:', err);
+  process.exit(1);
 });
