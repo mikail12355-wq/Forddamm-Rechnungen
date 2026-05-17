@@ -5,92 +5,92 @@ const archiver = require('archiver');
 const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
-router.get('/', async (req, res) => {
+// Express 4 fängt async-Fehler NICHT automatisch ab — dieser Wrapper
+// leitet jeden unbehandelten Fehler an den globalen Error-Handler weiter
+// statt den Request hängen zu lassen.
+const w = fn => (req, res, next) => fn(req, res, next).catch(next);
+
+// ─── LISTE ────────────────────────────────────────────────────────────────────
+router.get('/', w(async (req, res) => {
   const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
   const [result, yearsRes] = await Promise.all([
     queryInvoices({ search, sort, status, year, period }),
     db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM invoices ORDER BY y DESC")
   ]);
   const years = yearsRes.rows.map(r => r.y).filter(Boolean);
-  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort, status, year, period, years });
-});
+  res.render('invoices/index', {
+    title: 'Rechnungen', invoices: result.rows,
+    search: search || '', sort, status, year, period, years
+  });
+}));
 
-router.get('/export', async (req, res) => {
-  try {
-    const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
-    const listResult = await queryInvoices({ search, sort, status, year, period });
-    const invRows = listResult.rows;
+// ─── ZIP-EXPORT ───────────────────────────────────────────────────────────────
+router.get('/export', w(async (req, res) => {
+  const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
+  const listResult = await queryInvoices({ search, sort, status, year, period });
+  const invRows = listResult.rows;
 
-    if (invRows.length === 0) {
-      req.flash('error', 'Keine Rechnungen für den gewählten Filter gefunden.');
-      return res.redirect('/rechnungen');
-    }
-
-    // Alle Rechnungen mit vollständigen Kundendaten + alle Items in 2 Abfragen laden
-    const ids = invRows.map(r => r.id);
-    const ph  = ids.map(() => '?').join(',');
-    const [fullRes, itemsRes] = await Promise.all([
-      db.execute(`
-        SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-          c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
-        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-        WHERE i.id IN (${ph}) ORDER BY i.invoice_number ASC
-      `, ids),
-      db.execute(`
-        SELECT * FROM invoice_items WHERE invoice_id IN (${ph}) ORDER BY invoice_id, sort_order
-      `, ids)
-    ]);
-
-    const itemsByInvoice = {};
-    for (const item of itemsRes.rows) {
-      if (!itemsByInvoice[item.invoice_id]) itemsByInvoice[item.invoice_id] = [];
-      itemsByInvoice[item.invoice_id].push(item);
-    }
-
-    // ZIP-Dateiname aus aktiven Filtern zusammensetzen
-    const mNames = ['Jan','Feb','Maer','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-    const qNames = { Q1:'Q1_Jan-Maer', Q2:'Q2_Apr-Jun', Q3:'Q3_Jul-Sep', Q4:'Q4_Okt-Dez' };
-    let parts = ['Rechnungen'];
-    if (year   !== 'all') parts.push(year);
-    if (period !== 'all') parts.push(period.startsWith('Q') ? qNames[period] : mNames[parseInt(period,10)-1]);
-    if (status === 'paid') parts.push('Bezahlt');
-    if (status === 'open') parts.push('Offen');
-    const zipName = parts.join('-') + '.zip';
-
-    // PDFs sequenziell als Buffer erzeugen (verhindert Speicher/Stream-Probleme)
-    const pdfBuffers = [];
-    for (const invoice of fullRes.rows) {
-      const items = itemsByInvoice[invoice.id] || [];
-      const buf = await new Promise((resolve, reject) => {
-        const chunks = [];
-        const pt = new PassThrough();
-        pt.on('data', chunk => chunks.push(chunk));
-        pt.on('end',  () => resolve(Buffer.concat(chunks)));
-        pt.on('error', reject);
-        generatePDF(invoice, items, pt);
-      });
-      pdfBuffers.push({ name: `Rechnung-${invoice.invoice_number}.pdf`, buf });
-    }
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
-
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', err => { console.error('Archiver error:', err); });
-    archive.pipe(res);
-
-    for (const { name, buf } of pdfBuffers) {
-      archive.append(buf, { name });
-    }
-
-    archive.finalize();
-  } catch (err) {
-    console.error('ZIP export error:', err);
-    if (!res.headersSent) res.status(500).send('Export fehlgeschlagen: ' + err.message);
+  if (invRows.length === 0) {
+    req.flash('error', 'Keine Rechnungen für den gewählten Filter gefunden.');
+    return res.redirect('/rechnungen');
   }
-});
 
-router.get('/neu', async (req, res) => {
+  const ids = invRows.map(r => r.id);
+  const ph  = ids.map(() => '?').join(',');
+  const [fullRes, itemsRes] = await Promise.all([
+    db.execute(`
+      SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
+        c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+      FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id IN (${ph}) ORDER BY i.invoice_number ASC
+    `, ids),
+    db.execute(`
+      SELECT * FROM invoice_items WHERE invoice_id IN (${ph}) ORDER BY invoice_id, sort_order
+    `, ids)
+  ]);
+
+  const itemsByInvoice = {};
+  for (const item of itemsRes.rows) {
+    if (!itemsByInvoice[item.invoice_id]) itemsByInvoice[item.invoice_id] = [];
+    itemsByInvoice[item.invoice_id].push(item);
+  }
+
+  const mNames = ['Jan','Feb','Maer','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const qNames = { Q1:'Q1_Jan-Maer', Q2:'Q2_Apr-Jun', Q3:'Q3_Jul-Sep', Q4:'Q4_Okt-Dez' };
+  const parts = ['Rechnungen'];
+  if (year   !== 'all') parts.push(year);
+  if (period !== 'all') parts.push(period.startsWith('Q') ? qNames[period] : mNames[parseInt(period,10)-1]);
+  if (status === 'paid') parts.push('Bezahlt');
+  if (status === 'open') parts.push('Offen');
+  const zipName = parts.join('-') + '.zip';
+
+  // PDFs einzeln als Buffer erzeugen (sequenziell — verhindert Speicher/Stream-Deadlocks)
+  const pdfBuffers = [];
+  for (const invoice of fullRes.rows) {
+    const items = itemsByInvoice[invoice.id] || [];
+    const buf = await new Promise((resolve, reject) => {
+      const chunks = [];
+      const pt = new PassThrough();
+      pt.on('data',  chunk => chunks.push(chunk));
+      pt.on('end',   () => resolve(Buffer.concat(chunks)));
+      pt.on('error', reject);
+      generatePDF(invoice, items, pt);
+    });
+    pdfBuffers.push({ name: `Rechnung-${invoice.invoice_number}.pdf`, buf });
+  }
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => { console.error('Archiver error:', err); });
+  archive.pipe(res);
+  for (const { name, buf } of pdfBuffers) archive.append(buf, { name });
+  archive.finalize();
+}));
+
+// ─── NEUE RECHNUNG ────────────────────────────────────────────────────────────
+router.get('/neu', w(async (req, res) => {
   const [custRes, artRes, lastRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
@@ -99,24 +99,26 @@ router.get('/neu', async (req, res) => {
   ]);
   const nextNumber = (Number(lastRes.rows[0].max) || 247) + 1;
   const today = new Date().toISOString().split('T')[0];
-  const customerPricesMap = buildPricesMap(pricesRes.rows);
-  res.render('invoices/new', { title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows, nextNumber, today, editInvoice: null, editItems: [], customerPricesMap });
-});
+  res.render('invoices/new', {
+    title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows,
+    nextNumber, today, editInvoice: null, editItems: [],
+    customerPricesMap: buildPricesMap(pricesRes.rows)
+  });
+}));
 
-router.post('/neu', async (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
+router.post('/neu', w(async (req, res) => {
+  const { invoice_number, date, delivery_from, delivery_to, customer_id,
+          order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
 
   if (!invoice_number || !date || !customer_id) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
     return res.redirect('/rechnungen/neu');
   }
-
   const existing = await db.execute('SELECT id FROM invoices WHERE invoice_number = ?', [+invoice_number]);
   if (existing.rows[0]) {
     req.flash('error', `Rechnung Nr. ${invoice_number} existiert bereits.`);
     return res.redirect('/rechnungen/neu');
   }
-
   const validItems = parseItems(item_name, item_qty, item_price);
   if (!validItems.length) {
     req.flash('error', 'Mindestens ein Artikel mit Menge und Preis erforderlich.');
@@ -124,8 +126,9 @@ router.post('/neu', async (req, res) => {
   }
 
   const invRes = await db.execute(
-    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', delivery_contact || '']
+    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', delivery_contact||'']
   );
   const invoiceId = Number(invRes.lastInsertRowid);
 
@@ -136,18 +139,17 @@ router.post('/neu', async (req, res) => {
       [invoiceId, it.name, it.qty, it.price, i]
     );
   }
-
   req.flash('success', `Rechnung Nr. ${invoice_number} wurde erstellt.`);
   res.redirect(`/rechnungen/${invoiceId}`);
-});
+}));
 
-router.get('/:id', async (req, res) => {
+// ─── EINZELNE RECHNUNG ────────────────────────────────────────────────────────
+router.get('/:id', w(async (req, res) => {
   const invRes = await db.execute(`
-    SELECT i.*, i.paid, i.paid_at, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
+    SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
-
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
 
@@ -155,28 +157,25 @@ router.get('/:id', async (req, res) => {
   const items = itemsRes.rows;
   const totalNetto = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
   const ust = totalNetto * 0.07;
-
   res.render('invoices/view', { title: `Rechnung Nr. ${invoice.invoice_number}`, invoice, items, totalNetto, ust, totalBrutto: totalNetto + ust });
-});
+}));
 
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', w(async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
-
   const invoice = invRes.rows[0];
   if (!invoice) return res.status(404).send('Rechnung nicht gefunden');
 
   const itemsRes = await db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]);
-
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=Rechnung-${invoice.invoice_number}.pdf`);
   generatePDF(invoice, itemsRes.rows, res);
-});
+}));
 
-router.get('/:id/bearbeiten', async (req, res) => {
+router.get('/:id/bearbeiten', w(async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
@@ -190,30 +189,30 @@ router.get('/:id/bearbeiten', async (req, res) => {
     db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]),
     db.execute('SELECT customer_id, article_id, unit_price FROM customer_prices')
   ]);
-  const customerPricesMap = buildPricesMap(pricesRes.rows);
-
   res.render('invoices/new', {
     title: 'Rechnung bearbeiten', customers: custRes.rows, articles: artRes.rows,
     nextNumber: invoice.invoice_number, today: invoice.date,
-    editInvoice: invoice, editItems: itemsRes.rows, customerPricesMap
+    editInvoice: invoice, editItems: itemsRes.rows,
+    customerPricesMap: buildPricesMap(pricesRes.rows)
   });
-});
+}));
 
-router.post('/:id/bearbeiten', async (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
+router.post('/:id/bearbeiten', w(async (req, res) => {
+  const { invoice_number, date, delivery_from, delivery_to, customer_id,
+          order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
 
   const validItems = parseItems(item_name, item_qty, item_price);
   if (!validItems.length) {
     req.flash('error', 'Mindestens ein Artikel mit Menge und Preis erforderlich.');
     return res.redirect(`/rechnungen/${req.params.id}/bearbeiten`);
   }
-
   await db.execute(
-    `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?, customer_id=?, order_number=?, notes=?, delivery_contact=? WHERE id=?`,
-    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', delivery_contact || '', +req.params.id]
+    `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?,
+     customer_id=?, order_number=?, notes=?, delivery_contact=? WHERE id=?`,
+    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id,
+     order_number||'', notes||'', delivery_contact||'', +req.params.id]
   );
   await db.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [+req.params.id]);
-
   for (let i = 0; i < validItems.length; i++) {
     const it = validItems[i];
     await db.execute(
@@ -221,31 +220,30 @@ router.post('/:id/bearbeiten', async (req, res) => {
       [+req.params.id, it.name, it.qty, it.price, i]
     );
   }
-
   req.flash('success', `Rechnung Nr. ${invoice_number} aktualisiert.`);
   res.redirect(`/rechnungen/${req.params.id}`);
-});
+}));
 
-router.post('/:id/zahlung', async (req, res) => {
+router.post('/:id/zahlung', w(async (req, res) => {
   const invRes = await db.execute('SELECT paid FROM invoices WHERE id = ?', [+req.params.id]);
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
   const nowPaid = invoice.paid ? 0 : 1;
   const paidAt  = nowPaid ? new Date().toISOString().split('T')[0] : '';
   await db.execute('UPDATE invoices SET paid = ?, paid_at = ? WHERE id = ?', [nowPaid, paidAt, +req.params.id]);
-  const back = req.body.back || '/rechnungen';
-  res.redirect(back);
-});
+  res.redirect(req.body.back || '/rechnungen');
+}));
 
-router.post('/:id/loeschen', async (req, res) => {
+router.post('/:id/loeschen', w(async (req, res) => {
   const invRes = await db.execute('SELECT invoice_number FROM invoices WHERE id = ?', [+req.params.id]);
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
   await db.execute('DELETE FROM invoices WHERE id = ?', [+req.params.id]);
   req.flash('success', `Rechnung Nr. ${invoice.invoice_number} gelöscht.`);
   res.redirect('/rechnungen');
-});
+}));
 
+// ─── HILFSFUNKTIONEN ──────────────────────────────────────────────────────────
 function queryInvoices({ search, sort = 'desc', status = 'all', year = 'all', period = 'all' }) {
   const order = sort === 'asc' ? 'ASC' : 'DESC';
   let sql = `
@@ -265,9 +263,9 @@ function queryInvoices({ search, sort = 'desc', status = 'all', year = 'all', pe
   if (status === 'open') { where.push('(i.paid = 0 OR i.paid IS NULL)'); }
   if (year !== 'all')    { where.push("strftime('%Y', i.date) = ?"); args.push(year); }
   if (period !== 'all') {
-    const qMap = { Q1: ['01','02','03'], Q2: ['04','05','06'], Q3: ['07','08','09'], Q4: ['10','11','12'] };
+    const qMap = { Q1:['01','02','03'], Q2:['04','05','06'], Q3:['07','08','09'], Q4:['10','11','12'] };
     if (qMap[period]) {
-      where.push(`strftime('%m', i.date) IN (${qMap[period].map(() => '?').join(',')})`);
+      where.push(`strftime('%m', i.date) IN (${qMap[period].map(()=>'?').join(',')})`);
       args.push(...qMap[period]);
     } else {
       where.push("strftime('%m', i.date) = ?");
