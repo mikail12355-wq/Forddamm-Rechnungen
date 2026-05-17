@@ -3,6 +3,24 @@ document.querySelectorAll('.flash').forEach(el => {
   setTimeout(() => { el.style.transition = 'opacity 0.5s'; el.style.opacity = '0'; }, 4000);
 });
 
+// ── Mobile sidebar toggle ─────────────────────────────────────────────
+(function () {
+  const btn     = document.getElementById('hamburger-btn');
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (!btn || !sidebar || !overlay) return;
+
+  const open  = () => { sidebar.classList.add('open');    overlay.classList.add('active'); };
+  const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); };
+
+  btn.addEventListener('click', open);
+  overlay.addEventListener('click', close);
+
+  sidebar.querySelectorAll('a.nav-item, button.nav-item').forEach(item => {
+    item.addEventListener('click', () => { if (window.innerWidth <= 768) close(); });
+  });
+})();
+
 // ── Customer select preview ───────────────────────────────────────────
 const customerSelect = document.getElementById('customer-select');
 const customerPreview = document.getElementById('customer-preview');

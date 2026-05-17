@@ -1,6 +1,6 @@
 <div class="page-header">
   <h2>Rechnung Nr. <%= invoice.invoice_number %></h2>
-  <div style="display:flex;gap:8px">
+  <div class="page-header-actions">
     <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
     <a href="/rechnungen/<%= invoice.id %>/bearbeiten" class="btn-secondary">Bearbeiten</a>
     <a href="/rechnungen" class="btn-ghost">← Zurück</a>
@@ -113,7 +113,7 @@
   <div class="inv-footer">SteuerNr.20/460/01995</div>
 </div>
 
-<div style="margin-top:16px;padding-bottom:40px;display:flex;gap:8px">
+<div class="page-header-actions" style="margin-top:16px;padding-bottom:40px">
   <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
   <form action="/rechnungen/<%= invoice.id %>/loeschen" method="POST" onsubmit="return confirm('Rechnung wirklich löschen?')">
     <button type="submit" class="btn-danger">Rechnung löschen</button>
