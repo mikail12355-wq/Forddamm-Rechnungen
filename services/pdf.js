@@ -10,45 +10,84 @@ const C = {
   border: '#d4b896',
   gray:   '#9a8070',
   rowAlt: '#f9f5ef',
-  white:  '#ffffff',
 };
 
+// Layout-Konstanten
+const W = 595.28, H = 841.89;
+const mL = 52, mR = 52;
+const cW = W - mL - mR;          // 491.28
+
+// Tabellenspalten
+const tA = mL;                    // Artikel         52
+const tM = mL + 228;              // Menge           280
+const tE = mL + 280;              // Einzelpreis     332
+const tG = mL + 388;              // Gesamtpreis     440
+const tR = mL + cW;               // rechter Rand    543.28
+
+const ROW_H         = 21;
+const PAGE_BOTTOM   = H - 44;     // unterste Schreibgrenze (Footer ab H-40)
+const TOTALS_SPACE  = 165;        // Platz für Summen + Zahlungsinfos
+
+// ─── Seitenfuss (jede Seite) ──────────────────────────────────────────────
+function drawFooter(doc) {
+  doc.rect(mL, H - 40, cW, 1).fill(C.border);
+  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
+     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
+  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
+     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 26,
+           { width: cW, align: 'right', lineBreak: false });
+}
+
+// ─── Kopfzeile Folgeseiten ────────────────────────────────────────────────
+function drawContinuationHeader(doc, invoice) {
+  const y0 = 36;
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(11)
+     .text('BÄCKEREI FORDDAMM', mL, y0, { lineBreak: false });
+  doc.fillColor(C.gray).font('Helvetica').fontSize(8.5)
+     .text(`Rechnung Nr. ${invoice.invoice_number}  ·  Fortsetzung`,
+           mL, y0, { width: cW, align: 'right', lineBreak: false });
+  const lineY = y0 + 19;
+  doc.rect(mL, lineY, cW, 1.5).fill(C.gold);
+  return lineY + 16;
+}
+
+// ─── Tabellenkopf ────────────────────────────────────────────────────────
+function drawTableHeader(doc, y) {
+  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7.5);
+  doc.text('ARTIKEL',          tA,     y + 7, { lineBreak: false });
+  doc.text('MENGE',            tM,     y + 7, { lineBreak: false });
+  doc.text('EINZELPR. NETTO',  tE,     y + 7, { lineBreak: false });
+  doc.text('GESAMTPR. NETTO',  tG + 4, y + 7,
+           { width: tR - tG - 4, align: 'right', lineBreak: false });
+  const lineY = y + 22;
+  doc.rect(mL, lineY, cW, 1).fill(C.gold);
+  return lineY + 6;
+}
+
+// ─── Hauptfunktion ───────────────────────────────────────────────────────
 function generatePDF(invoice, items, stream) {
   const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Rechnung Nr. ${invoice.invoice_number}` } });
   doc.pipe(stream);
 
-  const W = 595.28, H = 841.89;
-  const mL = 52, mR = 52;
-  const cW = W - mL - mR;
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // 1 · HEADER (kein Balken – nur Typografie)
-  // ════════════════════════════════════════════════════════════════════════════
   let y = 44;
 
-  // Firmenname links
+  // ════ SEITE 1: HEADER ════════════════════════════════════════════════════
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(18)
      .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
   doc.fillColor(C.gold).font('Helvetica').fontSize(8)
      .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
 
-  // Rechnung-Nr. rechts
   doc.fillColor(C.gray).font('Helvetica').fontSize(8)
      .text('RECHNUNG', mL, y, { width: cW, align: 'right', lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(22)
      .text(`Nr. ${invoice.invoice_number}`, mL, y + 14, { width: cW, align: 'right', lineBreak: false });
 
   y += 50;
-
-  // Dünne Goldlinie als Trenner
   doc.rect(mL, y, cW, 1.5).fill(C.gold);
   y += 20;
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 2 · ADRESSEN
-  // ════════════════════════════════════════════════════════════════════════════
+  // ════ ADRESSEN ═══════════════════════════════════════════════════════════
   const c1 = mL, c2 = mL + cW * 0.44;
-
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7)
      .text('RECHNUNGSADRESSE', c1, y, { lineBreak: false })
      .text('LIEFERADRESSE',    c2, y, { lineBreak: false });
@@ -58,18 +97,18 @@ function generatePDF(invoice, items, stream) {
                  [invoice.billing_zip, invoice.billing_city].filter(Boolean).join(' ')].filter(Boolean);
   const deliv = [invoice.customer_name, invoice.delivery_contact, invoice.delivery_street,
                  [invoice.delivery_zip, invoice.delivery_city].filter(Boolean).join(' ')].filter(Boolean);
-
   const addrLines = Math.max(bill.length, deliv.length);
-  doc.fontSize(9);
+
   for (let i = 0; i < addrLines; i++) {
-    if (bill[i])  { doc.fillColor(i === 0 ? C.dark : C.mid).font(i === 0 ? 'Helvetica-Bold' : 'Helvetica').text(bill[i],  c1, y + i * 13, { width: cW * 0.42, lineBreak: false }); }
-    if (deliv[i]) { doc.fillColor(i === 0 ? C.dark : C.mid).font(i === 0 ? 'Helvetica-Bold' : 'Helvetica').text(deliv[i], c2, y + i * 13, { width: cW * 0.44, lineBreak: false }); }
+    const bold = i === 0;
+    if (bill[i])  doc.fillColor(bold ? C.dark : C.mid).font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
+                     .text(bill[i],  c1, y + i * 13, { width: cW * 0.42, lineBreak: false });
+    if (deliv[i]) doc.fillColor(bold ? C.dark : C.mid).font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
+                     .text(deliv[i], c2, y + i * 13, { width: cW * 0.44, lineBreak: false });
   }
   y += addrLines * 13 + 20;
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 3 · METADATEN-ZEILE
-  // ════════════════════════════════════════════════════════════════════════════
+  // ════ META ═══════════════════════════════════════════════════════════════
   const meta = [];
   if (invoice.order_number)  meta.push(['BESTELLNR.', invoice.order_number]);
   if (invoice.cost_center)   meta.push(['KOSTENSTELLE', invoice.cost_center]);
@@ -81,93 +120,83 @@ function generatePDF(invoice, items, stream) {
   }
   meta.push(['RECHNUNGSDATUM', fmtDate(invoice.date)]);
 
-  // Heller Hintergrundstreifen für Meta
   doc.rect(mL, y - 6, cW, 34).fill('#f6f0e8');
   const mColW = cW / meta.length;
   meta.forEach(([label, val], i) => {
     const mx = mL + 10 + i * mColW;
     doc.fillColor(C.gray).font('Helvetica').fontSize(7).text(label, mx, y, { lineBreak: false });
-    doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text(val, mx, y + 11, { lineBreak: false });
+    doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text(val,   mx, y + 11, { lineBreak: false });
   });
   y += 40;
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 4 · TABELLE
-  // ════════════════════════════════════════════════════════════════════════════
-  const tA = mL;
-  const tM = mL + 228;
-  const tE = mL + 280;
-  const tG = mL + 388;
-  const tR = mL + cW;
+  // ════ TABELLE ════════════════════════════════════════════════════════════
+  y = drawTableHeader(doc, y);
 
-  const rowH    = 21;
-  const headerH = 22;
-
-  // Tabellen-Header: nur unterstrichener Text, kein Balken
-  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7.5);
-  doc.text('ARTIKEL',           tA,     y + 7,  { lineBreak: false });
-  doc.text('MENGE',             tM,     y + 7,  { lineBreak: false });
-  doc.text('EINZELPR. NETTO',   tE,     y + 7,  { lineBreak: false });
-  doc.text('GESAMTPR. NETTO',   tG + 4, y + 7,  { width: tR - tG - 4, align: 'right', lineBreak: false });
-  y += headerH;
-  doc.rect(mL, y, cW, 1).fill(C.gold);
-  y += 6;
-
-  // Artikel-Zeilen
   let totalNetto = 0;
+
   items.forEach((item, idx) => {
+    // Seitenumbruch bei Bedarf
+    if (y + ROW_H > PAGE_BOTTOM) {
+      drawFooter(doc);
+      doc.addPage();
+      y = drawContinuationHeader(doc, invoice);
+      y = drawTableHeader(doc, y);
+    }
+
     const rowTotal = Number(item.quantity) * Number(item.unit_price);
     totalNetto += rowTotal;
 
-    if (idx % 2 !== 0) doc.rect(mL, y, cW, rowH).fill(C.rowAlt);
+    if (idx % 2 !== 0) doc.rect(mL, y, cW, ROW_H).fill(C.rowAlt);
 
     doc.fillColor(C.dark).font('Helvetica').fontSize(9);
-    doc.text(String(item.article_name),       tA,     y + 6, { width: tM - tA - 8,  lineBreak: false });
-    doc.text(String(item.quantity),            tM,     y + 6, { width: tE - tM - 8,  lineBreak: false });
-    doc.text(EUR(Number(item.unit_price)),      tE,     y + 6, { width: tG - tE - 8,  align: 'right', lineBreak: false });
+    doc.text(String(item.article_name),     tA,     y + 6, { width: tM - tA - 8,  lineBreak: false });
+    doc.text(String(item.quantity),          tM,     y + 6, { width: tE - tM - 8,  lineBreak: false });
+    doc.text(EUR(Number(item.unit_price)),    tE,     y + 6, { width: tG - tE - 8,  align: 'right', lineBreak: false });
     doc.font('Helvetica-Bold');
-    doc.text(EUR(rowTotal),                    tG + 4, y + 6, { width: tR - tG - 4,  align: 'right', lineBreak: false });
-    y += rowH;
+    doc.text(EUR(rowTotal),                  tG + 4, y + 6, { width: tR - tG - 4,  align: 'right', lineBreak: false });
+    y += ROW_H;
   });
 
+  // Untere Tabellenlinie
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 18;
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 5 · SUMMEN
-  // ════════════════════════════════════════════════════════════════════════════
+  // ════ SUMMEN – ggf. neue Seite ══════════════════════════════════════════
+  if (y + TOTALS_SPACE > PAGE_BOTTOM) {
+    drawFooter(doc);
+    doc.addPage();
+    y = drawContinuationHeader(doc, invoice);
+  }
+
   const ust         = totalNetto * 0.07;
   const totalBrutto = totalNetto + ust;
-  const sumX        = tE;
   const sumValX     = tG;
   const sumValW     = tR - tG - 4;
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
-     .text('Gesamtbetrag netto', sumX, y, { lineBreak: false });
+     .text('Gesamtbetrag netto', tE, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(totalNetto), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 17;
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
-     .text('+ 7 % USt', sumX, y, { lineBreak: false });
+     .text('+ 7 % USt', tE, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(ust), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 14;
 
-  doc.rect(sumX, y, tR - sumX, 1).fill(C.border);
+  doc.rect(tE, y, tR - tE, 1).fill(C.border);
   y += 10;
 
-  // Brutto: Goldener Akzentstreifen links, kein dunkler Kasten
-  doc.rect(sumX - 6, y - 2, 3, 26).fill(C.gold);
+  // Brutto mit goldenem Akzentstreifen
+  doc.rect(tE - 6, y - 2, 3, 26).fill(C.gold);
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9)
-     .text('Gesamtbetrag brutto', sumX + 4, y + 1, { lineBreak: false });
+     .text('Gesamtbetrag brutto', tE + 4, y + 1, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(15)
      .text(EUR(totalBrutto), sumValX, y - 2, { width: sumValW, align: 'right', lineBreak: false });
   y += 38;
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 6 · ZAHLUNG
-  // ════════════════════════════════════════════════════════════════════════════
+  // ════ ZAHLUNGSINFORMATIONEN ═══════════════════════════════════════════════
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 14;
 
@@ -178,9 +207,9 @@ function generatePDF(invoice, items, stream) {
   const p1 = mL, p2 = mL + 200, p3 = mL + 355;
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(7);
-  doc.text('IBAN',         p1, y, { lineBreak: false });
-  doc.text('BIC',          p2, y, { lineBreak: false });
-  doc.text('ZAHLUNGSART',  p3, y, { lineBreak: false });
+  doc.text('IBAN',        p1, y, { lineBreak: false });
+  doc.text('BIC',         p2, y, { lineBreak: false });
+  doc.text('ZAHLUNGSART', p3, y, { lineBreak: false });
   y += 11;
 
   doc.fillColor(C.dark).font('Helvetica').fontSize(9);
@@ -193,14 +222,8 @@ function generatePDF(invoice, items, stream) {
   y += 11;
   doc.fillColor(C.dark).font('Helvetica').fontSize(9).text('Murat Öztürk', p1, y, { lineBreak: false });
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 7 · FOOTER (kein Balken – nur kleiner Text)
-  // ════════════════════════════════════════════════════════════════════════════
-  doc.rect(mL, H - 40, cW, 1).fill(C.border);
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 26, { width: cW, align: 'right', lineBreak: false });
+  // Seitenfuss letzte Seite
+  drawFooter(doc);
 
   doc.end();
 }
