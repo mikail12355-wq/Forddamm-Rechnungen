@@ -402,6 +402,52 @@ body.login-page { display: block; background: var(--warm); min-height: 100vh; di
 .login-header h1 { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--dark); }
 .login-header p { font-size: 0.82rem; color: #888; margin-top: 4px; }
 
+/* ─── FILTER BAR ────────────────────────────────────────────────────── */
+.filter-bar {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow);
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filter-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray);
+  min-width: 52px;
+  flex-shrink: 0;
+}
+.filter-months {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filter-pill {
+  padding: 5px 13px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--mid);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.filter-pill:hover { border-color: var(--gold); color: var(--gold); }
+.filter-pill.active { background: var(--gold); border-color: var(--gold); color: #fff; }
+
 /* ─── DELIVERY TOGGLE ───────────────────────────────────────────────── */
 .delivery-toggle {
   display: flex;

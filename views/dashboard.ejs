@@ -3,32 +3,78 @@
   <a href="/rechnungen/neu" class="btn-primary">+ Neue Rechnung</a>
 </div>
 
+<!-- ── FILTER BAR ─────────────────────────────────────────────────── -->
+<div class="filter-bar">
+
+  <!-- Jahre -->
+  <div class="filter-group">
+    <span class="filter-label">Jahr</span>
+    <a href="/dashboard" class="filter-pill <%= filter.year === 'all' ? 'active' : '' %>">Alle</a>
+    <% availableYears.forEach(y => { %>
+      <a href="/dashboard?year=<%= y %>"
+         class="filter-pill <%= filter.year == y && !filter.month && !filter.quarter ? 'active' : '' %>">
+        <%= y %>
+      </a>
+    <% }) %>
+  </div>
+
+  <% if (filter.year !== 'all') { %>
+
+  <!-- Quartale -->
+  <div class="filter-group">
+    <span class="filter-label">Quartal</span>
+    <% [1,2,3,4].forEach(q => { %>
+      <a href="/dashboard?year=<%= filter.year %>&quarter=<%= q %>"
+         class="filter-pill <%= filter.quarter === q ? 'active' : '' %>">
+        Q<%= q %>
+      </a>
+    <% }) %>
+  </div>
+
+  <!-- Monate -->
+  <div class="filter-group">
+    <span class="filter-label">Monat</span>
+    <div class="filter-months">
+      <% monthNames.forEach((m, i) => { %>
+        <a href="/dashboard?year=<%= filter.year %>&month=<%= i+1 %>"
+           class="filter-pill <%= filter.month === i+1 ? 'active' : '' %>">
+          <%= m %>
+        </a>
+      <% }) %>
+    </div>
+  </div>
+
+  <% } %>
+</div>
+
+<!-- ── STATS ──────────────────────────────────────────────────────── -->
 <div class="stats-grid">
   <div class="stat-card">
     <div class="stat-value"><%= stats.invoices %></div>
-    <div class="stat-label">Rechnungen gesamt</div>
+    <div class="stat-label">Rechnungen · <%= periodLabel %></div>
   </div>
   <div class="stat-card">
     <div class="stat-value"><%= stats.customers %></div>
-    <div class="stat-label">Kunden</div>
+    <div class="stat-label">Kunden gesamt</div>
   </div>
   <div class="stat-card">
     <div class="stat-value"><%= stats.articles %></div>
-    <div class="stat-label">Artikel</div>
+    <div class="stat-label">Artikel aktiv</div>
   </div>
   <div class="stat-card accent">
     <div class="stat-value"><%= stats.revenue.toFixed(2).replace('.', ',') %> €</div>
-    <div class="stat-label">Gesamtumsatz netto</div>
+    <div class="stat-label">Umsatz netto · <%= periodLabel %></div>
   </div>
 </div>
 
+<!-- ── RECHNUNGSLISTE ─────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header">
-    <h3>Letzte Rechnungen</h3>
+    <h3><%= filter.year === 'all' ? 'Letzte Rechnungen' : 'Rechnungen · ' + periodLabel %></h3>
     <a href="/rechnungen" class="link">Alle anzeigen →</a>
   </div>
   <% if (latestInvoices.length === 0) { %>
-    <p class="empty-state">Noch keine Rechnungen vorhanden. <a href="/rechnungen/neu">Erste Rechnung erstellen</a></p>
+    <p class="empty-state">Keine Rechnungen im gewählten Zeitraum.</p>
   <% } else { %>
   <table class="data-table">
     <thead>
@@ -36,8 +82,8 @@
         <th>Nr.</th>
         <th>Datum</th>
         <th>Kunde</th>
-        <th>Betrag netto</th>
-        <th>Betrag brutto</th>
+        <th>Netto</th>
+        <th>Brutto</th>
         <th></th>
       </tr>
     </thead>
