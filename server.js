@@ -49,6 +49,19 @@ app.get('/', (req, res) => {
   res.redirect('/login');
 });
 
+// Global error handler — catches unhandled async errors in routes
+app.use((err, req, res, next) => {
+  console.error('Unhandled route error:', err);
+  if (res.headersSent) return next(err);
+  req.flash?.('error', 'Ein unerwarteter Fehler ist aufgetreten.');
+  res.status(500).redirect('back');
+});
+
+// Prevent unhandled promise rejections from crashing the process
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});
+
 initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Forddamm Rechnungssystem läuft auf http://localhost:${PORT}`);

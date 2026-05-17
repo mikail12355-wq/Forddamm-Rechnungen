@@ -12,18 +12,24 @@ router.get('/neu', (req, res) => {
 });
 
 router.post('/neu', async (req, res) => {
-  const { name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
-  if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect('/kunden/neu'); }
+  try {
+    const { name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
+    if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect('/kunden/neu'); }
 
-  const custRes = await db.execute(
-    `INSERT INTO customers (name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_contact||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'']
-  );
-  const customerId = Number(custRes.lastInsertRowid);
-  await saveCustomerPrices(customerId, req.body);
-  req.flash('success', `Kunde "${name}" wurde angelegt.`);
-  res.redirect('/kunden');
+    const custRes = await db.execute(
+      `INSERT INTO customers (name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_contact||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'']
+    );
+    const customerId = Number(custRes.lastInsertRowid);
+    await saveCustomerPrices(customerId, req.body);
+    req.flash('success', `Kunde "${name}" wurde angelegt.`);
+    res.redirect('/kunden');
+  } catch (err) {
+    console.error('POST /kunden/neu:', err);
+    req.flash('error', 'Fehler beim Anlegen des Kunden.');
+    res.redirect('/kunden/neu');
+  }
 });
 
 router.get('/:id/bearbeiten', async (req, res) => {
@@ -38,16 +44,22 @@ router.get('/:id/bearbeiten', async (req, res) => {
 });
 
 router.post('/:id/bearbeiten', async (req, res) => {
-  const { name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
-  if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect(`/kunden/${req.params.id}/bearbeiten`); }
+  try {
+    const { name, billing_street, billing_zip, billing_city, delivery_contact, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
+    if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect(`/kunden/${req.params.id}/bearbeiten`); }
 
-  await db.execute(
-    `UPDATE customers SET name=?, billing_street=?, billing_zip=?, billing_city=?, delivery_contact=?, delivery_street=?, delivery_zip=?, delivery_city=?, cost_center=? WHERE id=?`,
-    [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_contact||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'', +req.params.id]
-  );
-  await saveCustomerPrices(+req.params.id, req.body);
-  req.flash('success', `Kunde "${name}" aktualisiert.`);
-  res.redirect('/kunden');
+    await db.execute(
+      `UPDATE customers SET name=?, billing_street=?, billing_zip=?, billing_city=?, delivery_contact=?, delivery_street=?, delivery_zip=?, delivery_city=?, cost_center=? WHERE id=?`,
+      [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_contact||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'', +req.params.id]
+    );
+    await saveCustomerPrices(+req.params.id, req.body);
+    req.flash('success', `Kunde "${name}" aktualisiert.`);
+    res.redirect('/kunden');
+  } catch (err) {
+    console.error('POST /kunden/:id/bearbeiten:', err);
+    req.flash('error', 'Fehler beim Speichern des Kunden.');
+    res.redirect(`/kunden/${req.params.id}/bearbeiten`);
+  }
 });
 
 router.post('/:id/loeschen', async (req, res) => {
@@ -71,19 +83,24 @@ router.get('/api/:id', async (req, res) => {
 });
 
 async function saveCustomerPrices(customerId, body) {
-  await db.execute('DELETE FROM customer_prices WHERE customer_id = ?', [customerId]);
   const artRes = await db.execute('SELECT id FROM articles');
+
+  // Build all statements and send as a single batch (one round-trip to Turso)
+  const stmts = [
+    { sql: 'DELETE FROM customer_prices WHERE customer_id = ?', args: [customerId] }
+  ];
   for (const article of artRes.rows) {
     const raw = body[`price_article_${article.id}`];
     if (!raw || !String(raw).trim()) continue;
     const price = parseFloat(String(raw).replace(',', '.'));
     if (!isNaN(price) && price > 0) {
-      await db.execute(
-        'INSERT INTO customer_prices (customer_id, article_id, unit_price) VALUES (?, ?, ?)',
-        [customerId, article.id, price]
-      );
+      stmts.push({
+        sql: 'INSERT OR REPLACE INTO customer_prices (customer_id, article_id, unit_price) VALUES (?, ?, ?)',
+        args: [customerId, article.id, price]
+      });
     }
   }
+  await db.batch(stmts, 'write');
 }
 
 module.exports = router;
