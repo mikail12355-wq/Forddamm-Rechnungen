@@ -16,7 +16,6 @@
     <input type="hidden" name="status" value="<%= status %>" />
     <input type="hidden" name="year"   value="<%= year %>" />
     <input type="hidden" name="period" value="<%= period %>" />
-    <input type="hidden" name="sort"   value="<%= sort %>" />
     <input type="text" name="search" placeholder="Nr., Kunde, Bestellnr. …" value="<%= search %>" style="flex:1;min-width:180px" />
     <select name="sort" onchange="this.form.submit()" style="width:auto">
       <option value="desc" <%= sort==='desc'?'selected':'' %>>Neueste zuerst</option>

@@ -14,44 +14,50 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/export', async (req, res) => {
-  const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
-  const result = await queryInvoices({ search, sort, status, year, period });
+  try {
+    const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
+    const result = await queryInvoices({ search, sort, status, year, period });
 
-  const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  const qMonthNames = { Q1:'Jan–Mär', Q2:'Apr–Jun', Q3:'Jul–Sep', Q4:'Okt–Dez' };
+    const monthNames = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+    const qNames = { Q1:'Jan-Maer', Q2:'Apr-Jun', Q3:'Jul-Sep', Q4:'Okt-Dez' };
 
-  let nameParts = ['Rechnungen'];
-  if (year !== 'all') nameParts.push(year);
-  if (period !== 'all') {
-    if (period.startsWith('Q')) nameParts.push(period + '_' + qMonthNames[period]);
-    else nameParts.push(months[parseInt(period, 10) - 1]);
-  }
-  if (status === 'paid') nameParts.push('Bezahlt');
-  if (status === 'open') nameParts.push('Offen');
-  const filename = nameParts.join('-') + '.csv';
+    let nameParts = ['Rechnungen'];
+    if (year !== 'all') nameParts.push(year);
+    if (period !== 'all') {
+      nameParts.push(period.startsWith('Q') ? (period + '_' + qNames[period]) : monthNames[parseInt(period, 10) - 1]);
+    }
+    if (status === 'paid') nameParts.push('Bezahlt');
+    if (status === 'open') nameParts.push('Offen');
+    const filename = nameParts.join('-') + '.csv';
 
-  const header = 'Nr.;Datum;Lieferdatum;Kunde;Bestellnr.;Netto (€);USt 7% (€);Brutto (€);Status;Bezahlt am\r\n';
-  const rows = result.rows.map(inv => {
-    const netto  = Number(inv.total_netto || 0);
-    const ust    = netto * 0.07;
-    const brutto = netto + ust;
-    const fmt = n => n.toFixed(2).replace('.', ',');
     const fmtDate = s => s ? new Date(s).toLocaleDateString('de-DE') : '';
-    return [
-      inv.invoice_number,
-      fmtDate(inv.date),
-      inv.delivery_from ? (inv.delivery_to ? fmtDate(inv.delivery_from) + '–' + fmtDate(inv.delivery_to) : fmtDate(inv.delivery_from)) : '',
-      inv.customer_name || '',
-      inv.order_number  || '',
-      fmt(netto), fmt(ust), fmt(brutto),
-      inv.paid == 1 ? 'Bezahlt' : 'Offen',
-      inv.paid == 1 && inv.paid_at ? fmtDate(inv.paid_at) : ''
-    ].join(';');
-  }).join('\r\n');
+    const fmt     = n => Number(n).toFixed(2).replace('.', ',');
 
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send('﻿' + header + rows); // BOM für Excel
+    let csv = '﻿'; // UTF-8 BOM für Excel
+    csv += 'Nr.;Datum;Lieferdatum;Kunde;Bestellnr.;Netto (EUR);USt 7% (EUR);Brutto (EUR);Status;Bezahlt am\r\n';
+    for (const inv of result.rows) {
+      const netto  = Number(inv.total_netto || 0);
+      const ust    = netto * 0.07;
+      const brutto = netto + ust;
+      const lieferdatum = inv.delivery_from
+        ? (inv.delivery_to ? fmtDate(inv.delivery_from) + '-' + fmtDate(inv.delivery_to) : fmtDate(inv.delivery_from))
+        : '';
+      csv += [
+        inv.invoice_number, fmtDate(inv.date), lieferdatum,
+        inv.customer_name || '', inv.order_number || '',
+        fmt(netto), fmt(ust), fmt(brutto),
+        inv.paid == 1 ? 'Bezahlt' : 'Offen',
+        inv.paid == 1 && inv.paid_at ? fmtDate(inv.paid_at) : ''
+      ].join(';') + '\r\n';
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.end(csv);
+  } catch (err) {
+    console.error('CSV export error:', err);
+    res.status(500).send('Export fehlgeschlagen.');
+  }
 });
 
 router.get('/neu', async (req, res) => {
