@@ -4,30 +4,54 @@ const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
 router.get('/', async (req, res) => {
-  const { search, sort = 'desc', status = 'all' } = req.query;
-  const order = sort === 'asc' ? 'ASC' : 'DESC';
+  const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
+  const [result, yearsRes] = await Promise.all([
+    queryInvoices({ search, sort, status, year, period }),
+    db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM invoices ORDER BY y DESC")
+  ]);
+  const years = yearsRes.rows.map(r => r.y).filter(Boolean);
+  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort, status, year, period, years });
+});
 
-  let sql = `
-    SELECT i.id, i.invoice_number, i.date, i.delivery_from, i.delivery_to, i.order_number,
-      i.paid, i.paid_at,
-      c.name as customer_name,
-      (SELECT SUM(ii.quantity * ii.unit_price) FROM invoice_items ii WHERE ii.invoice_id = i.id) as total_netto
-    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-  `;
-  const args = [];
-  const where = [];
+router.get('/export', async (req, res) => {
+  const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
+  const result = await queryInvoices({ search, sort, status, year, period });
 
-  if (search) {
-    where.push('(CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)');
-    args.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const qMonthNames = { Q1:'Jan–Mär', Q2:'Apr–Jun', Q3:'Jul–Sep', Q4:'Okt–Dez' };
+
+  let nameParts = ['Rechnungen'];
+  if (year !== 'all') nameParts.push(year);
+  if (period !== 'all') {
+    if (period.startsWith('Q')) nameParts.push(period + '_' + qMonthNames[period]);
+    else nameParts.push(months[parseInt(period, 10) - 1]);
   }
-  if (status === 'paid')   { where.push('i.paid = 1'); }
-  if (status === 'open')   { where.push('(i.paid = 0 OR i.paid IS NULL)'); }
-  if (where.length) sql += ' WHERE ' + where.join(' AND ');
-  sql += ` ORDER BY i.invoice_number ${order}`;
+  if (status === 'paid') nameParts.push('Bezahlt');
+  if (status === 'open') nameParts.push('Offen');
+  const filename = nameParts.join('-') + '.csv';
 
-  const result = await db.execute(sql, args);
-  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort, status });
+  const header = 'Nr.;Datum;Lieferdatum;Kunde;Bestellnr.;Netto (€);USt 7% (€);Brutto (€);Status;Bezahlt am\r\n';
+  const rows = result.rows.map(inv => {
+    const netto  = Number(inv.total_netto || 0);
+    const ust    = netto * 0.07;
+    const brutto = netto + ust;
+    const fmt = n => n.toFixed(2).replace('.', ',');
+    const fmtDate = s => s ? new Date(s).toLocaleDateString('de-DE') : '';
+    return [
+      inv.invoice_number,
+      fmtDate(inv.date),
+      inv.delivery_from ? (inv.delivery_to ? fmtDate(inv.delivery_from) + '–' + fmtDate(inv.delivery_to) : fmtDate(inv.delivery_from)) : '',
+      inv.customer_name || '',
+      inv.order_number  || '',
+      fmt(netto), fmt(ust), fmt(brutto),
+      inv.paid == 1 ? 'Bezahlt' : 'Offen',
+      inv.paid == 1 && inv.paid_at ? fmtDate(inv.paid_at) : ''
+    ].join(';');
+  }).join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send('﻿' + header + rows); // BOM für Excel
 });
 
 router.get('/neu', async (req, res) => {
@@ -185,6 +209,39 @@ router.post('/:id/loeschen', async (req, res) => {
   req.flash('success', `Rechnung Nr. ${invoice.invoice_number} gelöscht.`);
   res.redirect('/rechnungen');
 });
+
+function queryInvoices({ search, sort = 'desc', status = 'all', year = 'all', period = 'all' }) {
+  const order = sort === 'asc' ? 'ASC' : 'DESC';
+  let sql = `
+    SELECT i.id, i.invoice_number, i.date, i.delivery_from, i.delivery_to, i.order_number,
+      i.paid, i.paid_at, c.name as customer_name,
+      (SELECT SUM(ii.quantity * ii.unit_price) FROM invoice_items ii WHERE ii.invoice_id = i.id) as total_netto
+    FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+  `;
+  const args = [];
+  const where = [];
+
+  if (search) {
+    where.push('(CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)');
+    args.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+  if (status === 'paid') { where.push('i.paid = 1'); }
+  if (status === 'open') { where.push('(i.paid = 0 OR i.paid IS NULL)'); }
+  if (year !== 'all')    { where.push("strftime('%Y', i.date) = ?"); args.push(year); }
+  if (period !== 'all') {
+    const qMap = { Q1: ['01','02','03'], Q2: ['04','05','06'], Q3: ['07','08','09'], Q4: ['10','11','12'] };
+    if (qMap[period]) {
+      where.push(`strftime('%m', i.date) IN (${qMap[period].map(() => '?').join(',')})`);
+      args.push(...qMap[period]);
+    } else {
+      where.push("strftime('%m', i.date) = ?");
+      args.push(period.padStart(2, '0'));
+    }
+  }
+  if (where.length) sql += ' WHERE ' + where.join(' AND ');
+  sql += ` ORDER BY i.invoice_number ${order}`;
+  return db.execute(sql, args);
+}
 
 function buildPricesMap(rows) {
   const map = {};

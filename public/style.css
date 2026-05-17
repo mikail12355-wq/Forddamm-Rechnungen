@@ -461,6 +461,26 @@ body.login-page { display: block; background: var(--warm); min-height: 100vh; di
 }
 .filter-pill:hover { border-color: var(--gold); color: var(--gold); }
 .filter-pill.active { background: var(--gold); border-color: var(--gold); color: #fff; }
+.filter-pill--open.active { background: #b45309; border-color: #b45309; }
+.filter-pill--paid.active { background: #065f46; border-color: #065f46; }
+
+.btn-export {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 8px;
+  background: var(--dark); color: #fff;
+  font-size: 0.82rem; font-weight: 700;
+  text-decoration: none; white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-export:hover { background: var(--mid); }
+
+.invoices-summary {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  font-size: 0.85rem; color: var(--mid);
+  padding: 10px 4px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
 
 /* ─── DELIVERY TOGGLE ───────────────────────────────────────────────── */
 .delivery-toggle {
