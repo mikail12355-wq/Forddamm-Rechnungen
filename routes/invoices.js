@@ -26,14 +26,16 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/neu', async (req, res) => {
-  const [custRes, artRes, lastRes] = await Promise.all([
+  const [custRes, artRes, lastRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
-    db.execute('SELECT MAX(invoice_number) as max FROM invoices')
+    db.execute('SELECT MAX(invoice_number) as max FROM invoices'),
+    db.execute('SELECT customer_id, article_id, unit_price FROM customer_prices')
   ]);
   const nextNumber = (Number(lastRes.rows[0].max) || 247) + 1;
   const today = new Date().toISOString().split('T')[0];
-  res.render('invoices/new', { title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows, nextNumber, today, editInvoice: null, editItems: [] });
+  const customerPricesMap = buildPricesMap(pricesRes.rows);
+  res.render('invoices/new', { title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows, nextNumber, today, editInvoice: null, editItems: [], customerPricesMap });
 });
 
 router.post('/neu', async (req, res) => {
@@ -117,16 +119,18 @@ router.get('/:id/bearbeiten', async (req, res) => {
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
 
-  const [custRes, artRes, itemsRes] = await Promise.all([
+  const [custRes, artRes, itemsRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
-    db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id])
+    db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]),
+    db.execute('SELECT customer_id, article_id, unit_price FROM customer_prices')
   ]);
+  const customerPricesMap = buildPricesMap(pricesRes.rows);
 
   res.render('invoices/new', {
     title: 'Rechnung bearbeiten', customers: custRes.rows, articles: artRes.rows,
     nextNumber: invoice.invoice_number, today: invoice.date,
-    editInvoice: invoice, editItems: itemsRes.rows
+    editInvoice: invoice, editItems: itemsRes.rows, customerPricesMap
   });
 });
 
@@ -165,6 +169,16 @@ router.post('/:id/loeschen', async (req, res) => {
   req.flash('success', `Rechnung Nr. ${invoice.invoice_number} gelöscht.`);
   res.redirect('/rechnungen');
 });
+
+function buildPricesMap(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const cid = String(r.customer_id);
+    if (!map[cid]) map[cid] = {};
+    map[cid][String(r.article_id)] = r.unit_price;
+  });
+  return map;
+}
 
 function parseItems(item_name, item_qty, item_price) {
   const names  = Array.isArray(item_name)  ? item_name  : [item_name];

@@ -402,6 +402,51 @@ body.login-page { display: block; background: var(--warm); min-height: 100vh; di
 .login-header h1 { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--dark); }
 .login-header p { font-size: 0.82rem; color: #888; margin-top: 4px; }
 
+/* ─── CUSTOMER PRICES ───────────────────────────────────────────────── */
+.prices-grid { display: flex; flex-direction: column; gap: 0; }
+.price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.price-row:last-child { border-bottom: none; }
+.price-article-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--dark);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.price-default { font-size: 0.78rem; font-weight: 400; color: var(--gray); }
+.price-input-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.price-input {
+  width: 110px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-family: 'Lato', sans-serif;
+  color: var(--text);
+  text-align: right;
+}
+.price-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200,145,58,0.12); }
+.price-input:not(:placeholder-shown) { border-color: var(--gold); background: #fffbf5; }
+.price-unit { font-size: 0.9rem; color: var(--mid); }
+.price-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
 /* ─── MOBILE TOPBAR ──────────────────────────────────────────────────── */
 .mobile-topbar {
   display: none;

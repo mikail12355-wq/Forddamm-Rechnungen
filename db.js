@@ -61,6 +61,13 @@ async function initDB() {
       unit_price REAL NOT NULL,
       sort_order INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS customer_prices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      unit_price REAL NOT NULL,
+      UNIQUE(customer_id, article_id)
+    );
   `);
 
   const adminRes = await db.execute('SELECT id FROM users WHERE username = ?', ['admin']);

@@ -93,7 +93,7 @@
 </form>
 
 <script>
-// Seed articles for JS usage
 const ARTICLES = <%- JSON.stringify(articles.map(a => ({ id: a.id, name: a.name, price: a.unit_price }))) %>;
 const SEED_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
+const CUSTOMER_PRICES = <%- JSON.stringify(customerPricesMap || {}) %>;
 </script>

@@ -56,6 +56,36 @@
     </div>
   </div>
 
+  <% if (articles && articles.length > 0) { %>
+  <div class="card">
+    <h3 class="card-title">Individuelle Artikelpreise</h3>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:18px">
+      Leer lassen = Standardpreis wird verwendet. Der Kundenpreis wird beim Erstellen einer Rechnung automatisch eingesetzt.
+    </p>
+    <div class="prices-grid">
+      <% articles.forEach(a => {
+           const cp = customerPrices.find(p => p.article_id == a.id);
+           const customVal = cp ? Number(cp.unit_price).toFixed(2).replace('.',',') : '';
+      %>
+      <div class="price-row">
+        <div class="price-article-name">
+          <%= a.name %>
+          <span class="price-default">Standard: <%= Number(a.unit_price).toFixed(2).replace('.',',') %> €</span>
+        </div>
+        <div class="price-input-wrap">
+          <input type="text" name="price_article_<%= a.id %>"
+                 value="<%= customVal %>"
+                 placeholder="<%= Number(a.unit_price).toFixed(2).replace('.',',') %>"
+                 class="price-input" />
+          <span class="price-unit">€</span>
+          <% if (cp) { %><span class="price-badge">Individuell</span><% } %>
+        </div>
+      </div>
+      <% }) %>
+    </div>
+  </div>
+  <% } %>
+
   <div style="display:flex;gap:12px;margin-bottom:40px">
     <button type="submit" class="btn-primary"><%= customer ? 'Änderungen speichern' : 'Kunde anlegen' %></button>
     <a href="/kunden" class="btn-secondary">Abbrechen</a>
