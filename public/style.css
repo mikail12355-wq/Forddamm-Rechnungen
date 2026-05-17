@@ -303,8 +303,22 @@ body {
 .action-links a:hover { text-decoration: underline; }
 .empty-state { color: #888; padding: 24px 0; }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
-.badge-green { background: #d1fae5; color: #065f46; }
-.badge-gray  { background: #f3f4f6; color: #6b7280; }
+.badge-green  { background: #d1fae5; color: #065f46; }
+.badge-gray   { background: #f3f4f6; color: #6b7280; }
+.badge-orange { background: #fff3cd; color: #7a4f00; }
+
+.status-filter { display: flex; gap: 8px; margin-bottom: 16px; }
+
+.paid-toggle {
+  background: none; border: 1.5px solid; border-radius: 20px;
+  padding: 2px 10px; font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+.paid-toggle--paid  { border-color: #065f46; color: #065f46; background: #d1fae5; }
+.paid-toggle--open  { border-color: #b45309; color: #7a4f00; background: #fff3cd; }
+.paid-toggle--paid:hover  { background: #a7f3d0; }
+.paid-toggle--open:hover  { background: #fde68a; }
+.paid-date { font-size: 0.72rem; color: #888; margin-top: 2px; }
 
 /* ─── INVOICE ITEMS FORM ─────────────────────────────────────────────── */
 .items-header {

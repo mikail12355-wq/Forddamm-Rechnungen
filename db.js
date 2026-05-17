@@ -72,6 +72,9 @@ async function initDB() {
 
   // Migration: delivery_contact moved from customers to invoices
   await db.execute("ALTER TABLE invoices ADD COLUMN delivery_contact TEXT DEFAULT ''").catch(() => {});
+  // Migration: payment tracking
+  await db.execute("ALTER TABLE invoices ADD COLUMN paid INTEGER DEFAULT 0").catch(() => {});
+  await db.execute("ALTER TABLE invoices ADD COLUMN paid_at TEXT DEFAULT ''").catch(() => {});
 
   const adminRes = await db.execute('SELECT id FROM users WHERE username = ?', ['admin']);
   if (!adminRes.rows[0]) {

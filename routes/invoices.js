@@ -4,25 +4,30 @@ const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
 router.get('/', async (req, res) => {
-  const { search, sort = 'desc' } = req.query;
+  const { search, sort = 'desc', status = 'all' } = req.query;
   const order = sort === 'asc' ? 'ASC' : 'DESC';
 
   let sql = `
     SELECT i.id, i.invoice_number, i.date, i.delivery_from, i.delivery_to, i.order_number,
+      i.paid, i.paid_at,
       c.name as customer_name,
       (SELECT SUM(ii.quantity * ii.unit_price) FROM invoice_items ii WHERE ii.invoice_id = i.id) as total_netto
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
   `;
   const args = [];
+  const where = [];
 
   if (search) {
-    sql += ` WHERE (CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)`;
+    where.push('(CAST(i.invoice_number AS TEXT) LIKE ? OR c.name LIKE ? OR i.order_number LIKE ?)');
     args.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
+  if (status === 'paid')   { where.push('i.paid = 1'); }
+  if (status === 'open')   { where.push('(i.paid = 0 OR i.paid IS NULL)'); }
+  if (where.length) sql += ' WHERE ' + where.join(' AND ');
   sql += ` ORDER BY i.invoice_number ${order}`;
 
   const result = await db.execute(sql, args);
-  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort });
+  res.render('invoices/index', { title: 'Rechnungen', invoices: result.rows, search: search || '', sort, status });
 });
 
 router.get('/neu', async (req, res) => {
@@ -78,7 +83,7 @@ router.post('/neu', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   const invRes = await db.execute(`
-    SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
+    SELECT i.*, i.paid, i.paid_at, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
@@ -159,6 +164,17 @@ router.post('/:id/bearbeiten', async (req, res) => {
 
   req.flash('success', `Rechnung Nr. ${invoice_number} aktualisiert.`);
   res.redirect(`/rechnungen/${req.params.id}`);
+});
+
+router.post('/:id/zahlung', async (req, res) => {
+  const invRes = await db.execute('SELECT paid FROM invoices WHERE id = ?', [+req.params.id]);
+  const invoice = invRes.rows[0];
+  if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
+  const nowPaid = invoice.paid ? 0 : 1;
+  const paidAt  = nowPaid ? new Date().toISOString().split('T')[0] : '';
+  await db.execute('UPDATE invoices SET paid = ?, paid_at = ? WHERE id = ?', [nowPaid, paidAt, +req.params.id]);
+  const back = req.body.back || '/rechnungen';
+  res.redirect(back);
 });
 
 router.post('/:id/loeschen', async (req, res) => {

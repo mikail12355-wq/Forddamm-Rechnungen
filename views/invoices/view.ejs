@@ -1,5 +1,11 @@
 <div class="page-header">
-  <h2>Rechnung Nr. <%= invoice.invoice_number %></h2>
+  <h2>Rechnung Nr. <%= invoice.invoice_number %>
+    <% if (invoice.paid == 1) { %>
+      <span class="badge badge-green" style="vertical-align:middle;margin-left:8px">Bezahlt</span>
+    <% } else { %>
+      <span class="badge badge-orange" style="vertical-align:middle;margin-left:8px">Offen</span>
+    <% } %>
+  </h2>
   <div class="page-header-actions">
     <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
     <a href="/rechnungen/<%= invoice.id %>/bearbeiten" class="btn-secondary">Bearbeiten</a>
@@ -115,6 +121,15 @@
 
 <div class="page-header-actions" style="margin-top:16px;padding-bottom:40px">
   <a href="/rechnungen/<%= invoice.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
+  <form action="/rechnungen/<%= invoice.id %>/zahlung" method="POST" style="display:inline">
+    <input type="hidden" name="back" value="/rechnungen/<%= invoice.id %>" />
+    <button type="submit" class="<%= invoice.paid == 1 ? 'btn-ghost' : 'btn-secondary' %>">
+      <%= invoice.paid == 1 ? 'Als offen markieren' : 'Als bezahlt markieren' %>
+    </button>
+  </form>
+  <% if (invoice.paid == 1 && invoice.paid_at) { %>
+    <span style="font-size:0.85rem;color:#065f46;font-weight:600">Bezahlt am <%= new Date(invoice.paid_at).toLocaleDateString('de-DE') %></span>
+  <% } %>
   <form action="/rechnungen/<%= invoice.id %>/loeschen" method="POST" onsubmit="return confirm('Rechnung wirklich löschen?')">
     <button type="submit" class="btn-danger">Rechnung löschen</button>
   </form>

@@ -6,13 +6,20 @@
 <div class="card">
   <form class="search-bar" method="GET" action="/rechnungen">
     <input type="text" name="search" placeholder="Suche nach Nr., Kunde, Bestellnr. …" value="<%= search %>" />
+    <input type="hidden" name="status" value="<%= status %>" />
     <select name="sort">
       <option value="desc" <%= sort==='desc'?'selected':'' %>>Neueste zuerst</option>
       <option value="asc"  <%= sort==='asc'?'selected':'' %>>Älteste zuerst</option>
     </select>
     <button type="submit" class="btn-secondary">Suchen</button>
-    <% if (search) { %><a href="/rechnungen" class="btn-ghost">Zurücksetzen</a><% } %>
+    <% if (search) { %><a href="/rechnungen?status=<%= status %>" class="btn-ghost">Zurücksetzen</a><% } %>
   </form>
+
+  <div class="status-filter">
+    <a href="/rechnungen?sort=<%= sort %><%= search ? '&search='+encodeURIComponent(search) : '' %>" class="filter-pill <%= status==='all' ? 'active' : '' %>">Alle</a>
+    <a href="/rechnungen?status=open&sort=<%= sort %><%= search ? '&search='+encodeURIComponent(search) : '' %>" class="filter-pill <%= status==='open' ? 'active' : '' %>">Offen</a>
+    <a href="/rechnungen?status=paid&sort=<%= sort %><%= search ? '&search='+encodeURIComponent(search) : '' %>" class="filter-pill <%= status==='paid' ? 'active' : '' %>">Bezahlt</a>
+  </div>
 
   <% if (invoices.length === 0) { %>
     <p class="empty-state">Keine Rechnungen gefunden.</p>
@@ -27,6 +34,7 @@
         <th>Bestellnr.</th>
         <th>Netto</th>
         <th>Brutto</th>
+        <th>Status</th>
         <th>Aktionen</th>
       </tr>
     </thead>
@@ -34,6 +42,7 @@
       <% invoices.forEach(inv => {
         const netto = inv.total_netto || 0;
         const brutto = netto * 1.07;
+        const isPaid = inv.paid == 1;
       %>
       <tr>
         <td><strong>#<%= inv.invoice_number %></strong></td>
@@ -48,6 +57,17 @@
         <td class="text-muted"><%= inv.order_number || '—' %></td>
         <td><%= netto.toFixed(2).replace('.',',') %> €</td>
         <td><strong><%= brutto.toFixed(2).replace('.',',') %> €</strong></td>
+        <td>
+          <form action="/rechnungen/<%= inv.id %>/zahlung" method="POST" style="display:inline">
+            <input type="hidden" name="back" value="/rechnungen?status=<%= status %>&sort=<%= sort %><%= search ? '&search='+encodeURIComponent(search) : '' %>" />
+            <button type="submit" class="paid-toggle <%= isPaid ? 'paid-toggle--paid' : 'paid-toggle--open' %>">
+              <%= isPaid ? '✓ Bezahlt' : '○ Offen' %>
+            </button>
+          </form>
+          <% if (isPaid && inv.paid_at) { %>
+            <div class="paid-date"><%= new Date(inv.paid_at).toLocaleDateString('de-DE') %></div>
+          <% } %>
+        </td>
         <td>
           <div class="action-links">
             <a href="/rechnungen/<%= inv.id %>">Ansehen</a>
