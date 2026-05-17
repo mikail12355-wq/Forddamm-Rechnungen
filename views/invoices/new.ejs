@@ -17,13 +17,32 @@
         <label>Datum <span class="required">*</span></label>
         <input type="date" name="date" value="<%= editInvoice ? editInvoice.date.split('T')[0] : today %>" required />
       </div>
-      <div class="form-group">
-        <label>Lieferdatum von</label>
-        <input type="date" name="delivery_from" value="<%= editInvoice && editInvoice.delivery_from ? editInvoice.delivery_from.split('T')[0] : '' %>" />
-      </div>
-      <div class="form-group">
-        <label>Lieferdatum bis</label>
-        <input type="date" name="delivery_to" value="<%= editInvoice && editInvoice.delivery_to ? editInvoice.delivery_to.split('T')[0] : '' %>" />
+      <div class="form-group" style="grid-column: 1 / -1">
+        <label>Lieferdatum</label>
+        <div class="delivery-toggle">
+          <% const hasRange = editInvoice && editInvoice.delivery_to; %>
+          <label class="toggle-option">
+            <input type="radio" name="delivery_type" value="day" <%= !hasRange ? 'checked' : '' %> onchange="toggleDelivery(this.value)" />
+            Einzelner Tag
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="delivery_type" value="range" <%= hasRange ? 'checked' : '' %> onchange="toggleDelivery(this.value)" />
+            Zeitraum
+          </label>
+        </div>
+        <div class="delivery-fields">
+          <div id="delivery-day" style="display:<%= !hasRange ? 'block' : 'none' %>">
+            <input type="date" id="delivery_single" value="<%= editInvoice && editInvoice.delivery_from && !hasRange ? editInvoice.delivery_from.split('T')[0] : '' %>" />
+          </div>
+          <div id="delivery-range" style="display:<%= hasRange ? 'flex' : 'none' %>; gap:8px; align-items:center; flex-wrap:wrap">
+            <input type="date" id="delivery_range_from" value="<%= editInvoice && editInvoice.delivery_from && hasRange ? editInvoice.delivery_from.split('T')[0] : '' %>" style="flex:1;min-width:140px" />
+            <span style="color:var(--mid);font-size:0.9rem">bis</span>
+            <input type="date" id="delivery_range_to" value="<%= editInvoice && editInvoice.delivery_to ? editInvoice.delivery_to.split('T')[0] : '' %>" style="flex:1;min-width:140px" />
+          </div>
+        </div>
+        <!-- Hidden fields submitted with form -->
+        <input type="hidden" name="delivery_from" id="hidden_delivery_from" value="<%= editInvoice && editInvoice.delivery_from ? editInvoice.delivery_from.split('T')[0] : '' %>" />
+        <input type="hidden" name="delivery_to"   id="hidden_delivery_to"   value="<%= editInvoice && editInvoice.delivery_to   ? editInvoice.delivery_to.split('T')[0]   : '' %>" />
       </div>
       <div class="form-group">
         <label>Bestellnummer</label>
@@ -96,4 +115,30 @@
 const ARTICLES = <%- JSON.stringify(articles.map(a => ({ id: a.id, name: a.name, price: a.unit_price }))) %>;
 const SEED_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
 const CUSTOMER_PRICES = <%- JSON.stringify(customerPricesMap || {}) %>;
+
+function toggleDelivery(type) {
+  document.getElementById('delivery-day').style.display   = type === 'day'   ? 'block' : 'none';
+  document.getElementById('delivery-range').style.display = type === 'range' ? 'flex'  : 'none';
+  syncDeliveryFields();
+}
+
+function syncDeliveryFields() {
+  const type = document.querySelector('input[name="delivery_type"]:checked')?.value;
+  const hFrom = document.getElementById('hidden_delivery_from');
+  const hTo   = document.getElementById('hidden_delivery_to');
+  if (type === 'day') {
+    hFrom.value = document.getElementById('delivery_single').value;
+    hTo.value   = '';
+  } else {
+    hFrom.value = document.getElementById('delivery_range_from').value;
+    hTo.value   = document.getElementById('delivery_range_to').value;
+  }
+}
+
+// Sync hidden fields before form submit and on every date change
+document.getElementById('invoice-form').addEventListener('submit', syncDeliveryFields);
+['delivery_single','delivery_range_from','delivery_range_to'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', syncDeliveryFields);
+});
 </script>

@@ -402,6 +402,48 @@ body.login-page { display: block; background: var(--warm); min-height: 100vh; di
 .login-header h1 { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--dark); }
 .login-header p { font-size: 0.82rem; color: #888; margin-top: 4px; }
 
+/* ─── DELIVERY TOGGLE ───────────────────────────────────────────────── */
+.delivery-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--mid);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.toggle-option input[type="radio"] { display: none; }
+.toggle-option:has(input:checked) {
+  border-color: var(--gold);
+  background: #fffbf5;
+  color: var(--dark);
+}
+.delivery-fields input[type="date"] {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-family: 'Lato', sans-serif;
+  color: var(--text);
+  background: #fff;
+  width: 100%;
+}
+.delivery-fields input[type="date"]:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(200,145,58,0.12);
+}
+
 /* ─── CUSTOMER PRICES ───────────────────────────────────────────────── */
 .prices-grid { display: flex; flex-direction: column; gap: 0; }
 .price-row {
