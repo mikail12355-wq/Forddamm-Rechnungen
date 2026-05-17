@@ -39,7 +39,7 @@ router.get('/neu', async (req, res) => {
 });
 
 router.post('/neu', async (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, item_name, item_qty, item_price } = req.body;
+  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
 
   if (!invoice_number || !date || !customer_id) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
@@ -59,8 +59,8 @@ router.post('/neu', async (req, res) => {
   }
 
   const invRes = await db.execute(
-    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '']
+    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', delivery_contact || '']
   );
   const invoiceId = Number(invRes.lastInsertRowid);
 
@@ -79,7 +79,7 @@ router.post('/neu', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_contact, c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+      c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
 
@@ -97,7 +97,7 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_contact, c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+      c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
 
@@ -135,7 +135,7 @@ router.get('/:id/bearbeiten', async (req, res) => {
 });
 
 router.post('/:id/bearbeiten', async (req, res) => {
-  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, item_name, item_qty, item_price } = req.body;
+  const { invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
 
   const validItems = parseItems(item_name, item_qty, item_price);
   if (!validItems.length) {
@@ -144,8 +144,8 @@ router.post('/:id/bearbeiten', async (req, res) => {
   }
 
   await db.execute(
-    `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?, customer_id=?, order_number=?, notes=? WHERE id=?`,
-    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', +req.params.id]
+    `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?, customer_id=?, order_number=?, notes=?, delivery_contact=? WHERE id=?`,
+    [+invoice_number, date, delivery_from || '', delivery_to || '', +customer_id, order_number || '', notes || '', delivery_contact || '', +req.params.id]
   );
   await db.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [+req.params.id]);
 

@@ -23,7 +23,7 @@
         <td><strong><%= c.name %></strong></td>
         <td class="text-muted"><%= [c.billing_street, c.billing_zip + ' ' + c.billing_city].filter(x=>x.trim()).join(', ') || '—' %></td>
         <td class="text-muted">
-          <%= [c.delivery_contact, c.delivery_street, c.delivery_zip + ' ' + c.delivery_city].filter(x=>x&&x.trim()).join(', ') || '—' %>
+          <%= [c.delivery_street, c.delivery_zip + ' ' + c.delivery_city].filter(x=>x&&x.trim()).join(', ') || '—' %>
         </td>
         <td class="text-muted"><%= c.cost_center || '—' %></td>
         <td>

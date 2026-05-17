@@ -61,7 +61,7 @@
         <% customers.forEach(c => { %>
           <option value="<%= c.id %>"
             data-billing="<%= c.billing_street %>, <%= c.billing_zip %> <%= c.billing_city %>"
-            data-delivery="<%= c.delivery_contact ? c.delivery_contact + ', ' : '' %><%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
+            data-delivery="<%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
             data-costcenter="<%= c.cost_center %>"
             <%= (editInvoice && editInvoice.customer_id == c.id) ? 'selected' : '' %>>
             <%= c.name %>
@@ -73,6 +73,12 @@
       <div><strong>Rechnungsadresse:</strong> <span id="preview-billing"></span></div>
       <div><strong>Lieferadresse:</strong> <span id="preview-delivery"></span></div>
       <div id="preview-costcenter-row"><strong>Kostenstelle:</strong> <span id="preview-costcenter"></span></div>
+    </div>
+    <div class="form-group" style="max-width:320px;margin-top:12px">
+      <label>Ansprechpartner <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+      <input type="text" name="delivery_contact"
+             value="<%= editInvoice ? editInvoice.delivery_contact : '' %>"
+             placeholder="z.B. Charlotte Wieland" />
     </div>
     <a href="/kunden/neu" target="_blank" class="link" style="font-size:0.85rem">+ Neuen Kunden anlegen</a>
   </div>

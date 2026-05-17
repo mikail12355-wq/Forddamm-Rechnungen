@@ -70,6 +70,9 @@ async function initDB() {
     );
   `);
 
+  // Migration: delivery_contact moved from customers to invoices
+  await db.execute("ALTER TABLE invoices ADD COLUMN delivery_contact TEXT DEFAULT ''").catch(() => {});
+
   const adminRes = await db.execute('SELECT id FROM users WHERE username = ?', ['admin']);
   if (!adminRes.rows[0]) {
     const hash = bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'Forddamm2024!', 10);
