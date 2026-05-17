@@ -1,20 +1,16 @@
 const PDFDocument = require('pdfkit');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const EUR = (n) => Number(n).toFixed(2).replace('.', ',') + ' €';
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 
-// ─── Brand colours ────────────────────────────────────────────────────────────
 const C = {
   dark:   '#2b1e0f',
   gold:   '#c8913a',
   mid:    '#6b4c2a',
-  warm:   '#f5e9d3',
-  cream:  '#fdf6ec',
   border: '#d4b896',
   gray:   '#9a8070',
+  rowAlt: '#f9f5ef',
   white:  '#ffffff',
-  rowAlt: '#faf5ee',
 };
 
 function generatePDF(invoice, items, stream) {
@@ -22,37 +18,41 @@ function generatePDF(invoice, items, stream) {
   doc.pipe(stream);
 
   const W = 595.28, H = 841.89;
-  const mL = 48, mR = 48;
+  const mL = 52, mR = 52;
   const cW = W - mL - mR;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 1 · HEADER BAR
+  // 1 · HEADER (kein Balken – nur Typografie)
   // ════════════════════════════════════════════════════════════════════════════
-  doc.rect(0, 0, W, 88).fill(C.dark);
+  let y = 44;
 
-  // Firmenname
-  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(21)
-     .text('BÄCKEREI FORDDAMM', mL, 20, { lineBreak: false });
-  doc.fillColor(C.gold).font('Helvetica').fontSize(8.5)
-     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, 47, { lineBreak: false });
+  // Firmenname links
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(18)
+     .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
+  doc.fillColor(C.gold).font('Helvetica').fontSize(8)
+     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
 
-  // Rechnung-Label & Nummer (rechts)
-  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(8)
-     .text('RECHNUNG', mL, 20, { width: cW, align: 'right', lineBreak: false });
-  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(26)
-     .text(`Nr. ${invoice.invoice_number}`, mL, 34, { width: cW, align: 'right', lineBreak: false });
+  // Rechnung-Nr. rechts
+  doc.fillColor(C.gray).font('Helvetica').fontSize(8)
+     .text('RECHNUNG', mL, y, { width: cW, align: 'right', lineBreak: false });
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(22)
+     .text(`Nr. ${invoice.invoice_number}`, mL, y + 14, { width: cW, align: 'right', lineBreak: false });
+
+  y += 50;
+
+  // Dünne Goldlinie als Trenner
+  doc.rect(mL, y, cW, 1.5).fill(C.gold);
+  y += 20;
 
   // ════════════════════════════════════════════════════════════════════════════
   // 2 · ADRESSEN
   // ════════════════════════════════════════════════════════════════════════════
-  let y = 108;
   const c1 = mL, c2 = mL + cW * 0.44;
 
-  // Labels
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7)
      .text('RECHNUNGSADRESSE', c1, y, { lineBreak: false })
      .text('LIEFERADRESSE',    c2, y, { lineBreak: false });
-  y += 13;
+  y += 12;
 
   const bill  = [invoice.customer_name, invoice.billing_street,
                  [invoice.billing_zip, invoice.billing_city].filter(Boolean).join(' ')].filter(Boolean);
@@ -60,21 +60,15 @@ function generatePDF(invoice, items, stream) {
                  [invoice.delivery_zip, invoice.delivery_city].filter(Boolean).join(' ')].filter(Boolean);
 
   const addrLines = Math.max(bill.length, deliv.length);
-  doc.font('Helvetica').fontSize(9);
+  doc.fontSize(9);
   for (let i = 0; i < addrLines; i++) {
-    if (bill[i])  { doc.fillColor(i === 0 ? C.dark : C.mid).text(bill[i],  c1, y + i * 13, { width: cW * 0.42, lineBreak: false }); }
-    if (deliv[i]) { doc.fillColor(i === 0 ? C.dark : C.mid).text(deliv[i], c2, y + i * 13, { width: cW * 0.40, lineBreak: false }); }
+    if (bill[i])  { doc.fillColor(i === 0 ? C.dark : C.mid).font(i === 0 ? 'Helvetica-Bold' : 'Helvetica').text(bill[i],  c1, y + i * 13, { width: cW * 0.42, lineBreak: false }); }
+    if (deliv[i]) { doc.fillColor(i === 0 ? C.dark : C.mid).font(i === 0 ? 'Helvetica-Bold' : 'Helvetica').text(deliv[i], c2, y + i * 13, { width: cW * 0.44, lineBreak: false }); }
   }
-  y += addrLines * 13 + 14;
+  y += addrLines * 13 + 20;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 3 · GOLDENE TRENNLINIE
-  // ════════════════════════════════════════════════════════════════════════════
-  doc.rect(mL, y, cW, 2).fill(C.gold);
-  y += 12;
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // 4 · METADATEN-ZEILE
+  // 3 · METADATEN-ZEILE
   // ════════════════════════════════════════════════════════════════════════════
   const meta = [];
   if (invoice.order_number)  meta.push(['BESTELLNR.', invoice.order_number]);
@@ -87,34 +81,37 @@ function generatePDF(invoice, items, stream) {
   }
   meta.push(['RECHNUNGSDATUM', fmtDate(invoice.date)]);
 
+  // Heller Hintergrundstreifen für Meta
+  doc.rect(mL, y - 6, cW, 34).fill('#f6f0e8');
   const mColW = cW / meta.length;
   meta.forEach(([label, val], i) => {
-    const mx = mL + i * mColW;
+    const mx = mL + 10 + i * mColW;
     doc.fillColor(C.gray).font('Helvetica').fontSize(7).text(label, mx, y, { lineBreak: false });
     doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text(val, mx, y + 11, { lineBreak: false });
   });
-  y += 34;
+  y += 40;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 5 · TABELLE
+  // 4 · TABELLE
   // ════════════════════════════════════════════════════════════════════════════
-  const tA = mL;           // Artikel       x = 48
-  const tM = mL + 230;     // Menge         x = 278
-  const tE = mL + 280;     // Einzelpreis   x = 328
-  const tG = mL + 385;     // Gesamtpreis   x = 433
-  const tR = mL + cW;      // rechts        x = 547
+  const tA = mL;
+  const tM = mL + 228;
+  const tE = mL + 280;
+  const tG = mL + 388;
+  const tR = mL + cW;
 
   const rowH    = 21;
-  const headerH = 24;
+  const headerH = 22;
 
-  // Tabellen-Header
-  doc.rect(mL, y, cW, headerH).fill(C.dark);
+  // Tabellen-Header: nur unterstrichener Text, kein Balken
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7.5);
-  doc.text('ARTIKEL',           tA + 8, y + 8, { lineBreak: false });
-  doc.text('MENGE',             tM + 4, y + 8, { lineBreak: false });
-  doc.text('EINZELPR. NETTO',   tE + 4, y + 8, { lineBreak: false });
-  doc.text('GESAMTPR. NETTO',   tG + 4, y + 8, { width: tR - tG - 8, align: 'right', lineBreak: false });
+  doc.text('ARTIKEL',           tA,     y + 7,  { lineBreak: false });
+  doc.text('MENGE',             tM,     y + 7,  { lineBreak: false });
+  doc.text('EINZELPR. NETTO',   tE,     y + 7,  { lineBreak: false });
+  doc.text('GESAMTPR. NETTO',   tG + 4, y + 7,  { width: tR - tG - 4, align: 'right', lineBreak: false });
   y += headerH;
+  doc.rect(mL, y, cW, 1).fill(C.gold);
+  y += 6;
 
   // Artikel-Zeilen
   let totalNetto = 0;
@@ -122,65 +119,61 @@ function generatePDF(invoice, items, stream) {
     const rowTotal = Number(item.quantity) * Number(item.unit_price);
     totalNetto += rowTotal;
 
-    doc.rect(mL, y, cW, rowH).fill(idx % 2 === 0 ? C.white : C.rowAlt);
+    if (idx % 2 !== 0) doc.rect(mL, y, cW, rowH).fill(C.rowAlt);
 
     doc.fillColor(C.dark).font('Helvetica').fontSize(9);
-    doc.text(String(item.article_name),        tA + 8, y + 6, { width: tM - tA - 12, lineBreak: false });
-    doc.text(String(item.quantity),             tM + 4, y + 6, { width: tE - tM - 8,  lineBreak: false });
-    doc.text(EUR(Number(item.unit_price)),       tE + 4, y + 6, { width: tG - tE - 8,  align: 'right', lineBreak: false });
-    doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9);
-    doc.text(EUR(rowTotal),                     tG + 4, y + 6, { width: tR - tG - 8,  align: 'right', lineBreak: false });
+    doc.text(String(item.article_name),       tA,     y + 6, { width: tM - tA - 8,  lineBreak: false });
+    doc.text(String(item.quantity),            tM,     y + 6, { width: tE - tM - 8,  lineBreak: false });
+    doc.text(EUR(Number(item.unit_price)),      tE,     y + 6, { width: tG - tE - 8,  align: 'right', lineBreak: false });
+    doc.font('Helvetica-Bold');
+    doc.text(EUR(rowTotal),                    tG + 4, y + 6, { width: tR - tG - 4,  align: 'right', lineBreak: false });
     y += rowH;
   });
 
-  // Untere Tabellenlinie
-  doc.rect(mL, y, cW, 1.5).fill(C.gold);
-  y += 16;
+  doc.rect(mL, y, cW, 1).fill(C.border);
+  y += 18;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 6 · SUMMEN (rechtsbündig)
+  // 5 · SUMMEN
   // ════════════════════════════════════════════════════════════════════════════
   const ust         = totalNetto * 0.07;
   const totalBrutto = totalNetto + ust;
   const sumX        = tE;
   const sumValX     = tG;
-  const sumValW     = tR - tG - 8;
+  const sumValW     = tR - tG - 4;
 
-  // Netto
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
      .text('Gesamtbetrag netto', sumX, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(totalNetto), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 17;
 
-  // USt
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
      .text('+ 7 % USt', sumX, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(ust), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 14;
 
-  // Trennstrich vor Brutto
   doc.rect(sumX, y, tR - sumX, 1).fill(C.border);
-  y += 8;
+  y += 10;
 
-  // Brutto-Box
-  doc.rect(sumX - 6, y - 4, tR - sumX + 6, 30).fill(C.dark);
-  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(8.5)
-     .text('GESAMTBETRAG BRUTTO', sumX, y + 5, { lineBreak: false });
-  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(13)
-     .text(EUR(totalBrutto), sumValX, y + 3, { width: sumValW, align: 'right', lineBreak: false });
-  y += 42;
+  // Brutto: Goldener Akzentstreifen links, kein dunkler Kasten
+  doc.rect(sumX - 6, y - 2, 3, 26).fill(C.gold);
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9)
+     .text('Gesamtbetrag brutto', sumX + 4, y + 1, { lineBreak: false });
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(15)
+     .text(EUR(totalBrutto), sumValX, y - 2, { width: sumValW, align: 'right', lineBreak: false });
+  y += 38;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 7 · ZAHLUNG
+  // 6 · ZAHLUNG
   // ════════════════════════════════════════════════════════════════════════════
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 14;
 
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7.5)
      .text('ZAHLUNGSINFORMATIONEN', mL, y, { lineBreak: false });
-  y += 14;
+  y += 13;
 
   const p1 = mL, p2 = mL + 200, p3 = mL + 355;
 
@@ -196,20 +189,18 @@ function generatePDF(invoice, items, stream) {
   doc.text('Überweisung',                 p3, y, { lineBreak: false });
   y += 15;
 
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7)
-     .text('KONTOINHABER', p1, y, { lineBreak: false });
+  doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('KONTOINHABER', p1, y, { lineBreak: false });
   y += 11;
-  doc.fillColor(C.dark).font('Helvetica').fontSize(9)
-     .text('Murat Öztürk', p1, y, { lineBreak: false });
+  doc.fillColor(C.dark).font('Helvetica').fontSize(9).text('Murat Öztürk', p1, y, { lineBreak: false });
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 8 · FOOTER BAR
+  // 7 · FOOTER (kein Balken – nur kleiner Text)
   // ════════════════════════════════════════════════════════════════════════════
-  doc.rect(0, H - 34, W, 34).fill(C.dark);
-  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(8)
-     .text('SteuerNr. 20/460/01995', mL, H - 21, { lineBreak: false });
+  doc.rect(mL, H - 40, cW, 1).fill(C.border);
   doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 21, { width: cW, align: 'right', lineBreak: false });
+     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
+  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
+     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 26, { width: cW, align: 'right', lineBreak: false });
 
   doc.end();
 }
