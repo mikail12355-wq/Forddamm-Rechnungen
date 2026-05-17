@@ -57,21 +57,33 @@ router.get('/export', async (req, res) => {
     if (status === 'open') parts.push('Offen');
     const zipName = parts.join('-') + '.zip';
 
+    // PDFs sequenziell als Buffer erzeugen (verhindert Speicher/Stream-Probleme)
+    const pdfBuffers = [];
+    for (const invoice of fullRes.rows) {
+      const items = itemsByInvoice[invoice.id] || [];
+      const buf = await new Promise((resolve, reject) => {
+        const chunks = [];
+        const pt = new PassThrough();
+        pt.on('data', chunk => chunks.push(chunk));
+        pt.on('end',  () => resolve(Buffer.concat(chunks)));
+        pt.on('error', reject);
+        generatePDF(invoice, items, pt);
+      });
+      pdfBuffers.push({ name: `Rechnung-${invoice.invoice_number}.pdf`, buf });
+    }
+
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
 
     const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', err => { throw err; });
+    archive.on('error', err => { console.error('Archiver error:', err); });
     archive.pipe(res);
 
-    for (const invoice of fullRes.rows) {
-      const items = itemsByInvoice[invoice.id] || [];
-      const pt = new PassThrough();
-      archive.append(pt, { name: `Rechnung-${invoice.invoice_number}.pdf` });
-      generatePDF(invoice, items, pt);
+    for (const { name, buf } of pdfBuffers) {
+      archive.append(buf, { name });
     }
 
-    await archive.finalize();
+    archive.finalize();
   } catch (err) {
     console.error('ZIP export error:', err);
     if (!res.headersSent) res.status(500).send('Export fehlgeschlagen: ' + err.message);
