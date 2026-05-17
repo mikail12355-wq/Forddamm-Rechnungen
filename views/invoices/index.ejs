@@ -69,7 +69,7 @@
         <a href="/rechnungen?<%= qs({status:'paid'}) %>" class="filter-pill filter-pill--paid <%= status==='paid' ? 'active' : '' %>">Bezahlt</a>
       </div>
     </div>
-    <a href="/rechnungen/export?<%= qs({}) %>" class="btn-export">⬇ CSV herunterladen</a>
+    <a href="/rechnungen/export?<%= qs({}) %>" class="btn-export">⬇ PDFs herunterladen (<%= invoices.length %>)</a>
   </div>
 </div>
 

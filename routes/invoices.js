@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { PassThrough } = require('stream');
+const archiver = require('archiver');
 const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
@@ -16,47 +18,63 @@ router.get('/', async (req, res) => {
 router.get('/export', async (req, res) => {
   try {
     const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
-    const result = await queryInvoices({ search, sort, status, year, period });
+    const listResult = await queryInvoices({ search, sort, status, year, period });
+    const invRows = listResult.rows;
 
-    const monthNames = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-    const qNames = { Q1:'Jan-Maer', Q2:'Apr-Jun', Q3:'Jul-Sep', Q4:'Okt-Dez' };
-
-    let nameParts = ['Rechnungen'];
-    if (year !== 'all') nameParts.push(year);
-    if (period !== 'all') {
-      nameParts.push(period.startsWith('Q') ? (period + '_' + qNames[period]) : monthNames[parseInt(period, 10) - 1]);
-    }
-    if (status === 'paid') nameParts.push('Bezahlt');
-    if (status === 'open') nameParts.push('Offen');
-    const filename = nameParts.join('-') + '.csv';
-
-    const fmtDate = s => s ? new Date(s).toLocaleDateString('de-DE') : '';
-    const fmt     = n => Number(n).toFixed(2).replace('.', ',');
-
-    let csv = '﻿'; // UTF-8 BOM für Excel
-    csv += 'Nr.;Datum;Lieferdatum;Kunde;Bestellnr.;Netto (EUR);USt 7% (EUR);Brutto (EUR);Status;Bezahlt am\r\n';
-    for (const inv of result.rows) {
-      const netto  = Number(inv.total_netto || 0);
-      const ust    = netto * 0.07;
-      const brutto = netto + ust;
-      const lieferdatum = inv.delivery_from
-        ? (inv.delivery_to ? fmtDate(inv.delivery_from) + '-' + fmtDate(inv.delivery_to) : fmtDate(inv.delivery_from))
-        : '';
-      csv += [
-        inv.invoice_number, fmtDate(inv.date), lieferdatum,
-        inv.customer_name || '', inv.order_number || '',
-        fmt(netto), fmt(ust), fmt(brutto),
-        inv.paid == 1 ? 'Bezahlt' : 'Offen',
-        inv.paid == 1 && inv.paid_at ? fmtDate(inv.paid_at) : ''
-      ].join(';') + '\r\n';
+    if (invRows.length === 0) {
+      req.flash('error', 'Keine Rechnungen für den gewählten Filter gefunden.');
+      return res.redirect('/rechnungen');
     }
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.end(csv);
+    // Alle Rechnungen mit vollständigen Kundendaten + alle Items in 2 Abfragen laden
+    const ids = invRows.map(r => r.id);
+    const ph  = ids.map(() => '?').join(',');
+    const [fullRes, itemsRes] = await Promise.all([
+      db.execute(`
+        SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
+          c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.id IN (${ph}) ORDER BY i.invoice_number ASC
+      `, ids),
+      db.execute(`
+        SELECT * FROM invoice_items WHERE invoice_id IN (${ph}) ORDER BY invoice_id, sort_order
+      `, ids)
+    ]);
+
+    const itemsByInvoice = {};
+    for (const item of itemsRes.rows) {
+      if (!itemsByInvoice[item.invoice_id]) itemsByInvoice[item.invoice_id] = [];
+      itemsByInvoice[item.invoice_id].push(item);
+    }
+
+    // ZIP-Dateiname aus aktiven Filtern zusammensetzen
+    const mNames = ['Jan','Feb','Maer','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+    const qNames = { Q1:'Q1_Jan-Maer', Q2:'Q2_Apr-Jun', Q3:'Q3_Jul-Sep', Q4:'Q4_Okt-Dez' };
+    let parts = ['Rechnungen'];
+    if (year   !== 'all') parts.push(year);
+    if (period !== 'all') parts.push(period.startsWith('Q') ? qNames[period] : mNames[parseInt(period,10)-1]);
+    if (status === 'paid') parts.push('Bezahlt');
+    if (status === 'open') parts.push('Offen');
+    const zipName = parts.join('-') + '.zip';
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => { throw err; });
+    archive.pipe(res);
+
+    for (const invoice of fullRes.rows) {
+      const items = itemsByInvoice[invoice.id] || [];
+      const pt = new PassThrough();
+      archive.append(pt, { name: `Rechnung-${invoice.invoice_number}.pdf` });
+      generatePDF(invoice, items, pt);
+    }
+
+    await archive.finalize();
   } catch (err) {
-    console.error('CSV export error:', err);
-    res.status(500).send('Export fehlgeschlagen.');
+    console.error('ZIP export error:', err);
+    if (!res.headersSent) res.status(500).send('Export fehlgeschlagen: ' + err.message);
   }
 });
 
