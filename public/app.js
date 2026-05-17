@@ -129,7 +129,7 @@ document.querySelectorAll('.flash').forEach(el => {
         <input type="text" name="item_name" class="inp-name" value="${escHtml(name)}"
                placeholder="Artikelname" required style="display:${name && !(typeof ARTICLES !== 'undefined' && ARTICLES.find(a => a.name === name)) ? '' : 'none'}" />
       </div>
-      <input type="number" name="item_qty"   class="inp-qty"   value="${qty}" min="0.1" step="0.1" required />
+      <input type="number" name="item_qty"   class="inp-qty"   value="${qty}" min="0.5" step="0.5" required />
       <input type="text"   name="item_price" class="inp-price" value="${priceFormatted}" placeholder="0,00" required />
       <div class="item-total">—</div>
       <button type="button" class="remove-row" title="Entfernen">×</button>
