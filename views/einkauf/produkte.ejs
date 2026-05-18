@@ -54,12 +54,12 @@ supplierNames.forEach(sup => {
           <div class="subcategory-header"><%= cat %></div>
 
           <% groupKeys.forEach(key => {
-            const group    = products[key];
-            const entries  = group.entries;
-            const prices   = entries.map(e => e.unit_price);
-            const minPrice = Math.min(...prices);
-            const latest   = entries[0];
-            const allSame  = prices.every(p => p === minPrice);
+            const group      = products[key];
+            const entries    = group.entries;
+            const minPrice   = Math.min(...entries.map(e => e.unit_price));
+            const latest     = entries[0];
+            const prev       = entries.length > 1 ? entries[1] : null;
+            const trend      = prev ? (latest.unit_price > prev.unit_price ? 'up' : latest.unit_price < prev.unit_price ? 'down' : null) : null;
             const searchTerms = [group.displayName, ...group.originalNames].join(' ').toLowerCase();
           %>
             <div class="product-card" data-name="<%= searchTerms %>" data-supplier="<%= sup %>">
@@ -77,8 +77,12 @@ supplierNames.forEach(sup => {
                     <%= group.hasAlias %>
                   )" title="Oberbegriff bearbeiten">✏️</button>
                 <div class="product-prices">
-                  <span class="price-netto"><%= minPrice.toFixed(2).replace('.',',') %> € netto/<%= latest.unit %></span>
-                  <span class="price-brutto"><%= (minPrice * 1.07).toFixed(2).replace('.',',') %> € brutto</span>
+                  <span class="price-netto">
+                    <%= latest.unit_price.toFixed(2).replace('.',',') %> € netto/<%= latest.unit %>
+                    <% if (trend === 'up') { %><span class="trend-up">↑</span><% } %>
+                    <% if (trend === 'down') { %><span class="trend-down">↓</span><% } %>
+                  </span>
+                  <span class="price-brutto"><%= (latest.unit_price * 1.07).toFixed(2).replace('.',',') %> € brutto</span>
                 </div>
               </div>
 
@@ -92,18 +96,23 @@ supplierNames.forEach(sup => {
 
               <div class="product-meta">
                 <%= new Date(latest.date).toLocaleDateString('de-DE') %>
-                <% if (!allSame) { %><span style="color:var(--gold);margin-left:4px">▾ günstigster</span><% } %>
+                <% if (prev && latest.unit_price !== prev.unit_price) { %>
+                  &nbsp;·&nbsp; vorher: <%= prev.unit_price.toFixed(2).replace('.',',') %> €
+                <% } %>
               </div>
 
               <% if (entries.length > 1) { %>
               <details class="price-history">
                 <summary>Alle <%= entries.length %> Preise anzeigen</summary>
                 <table style="width:100%;margin-top:8px;font-size:0.82rem;border-collapse:collapse">
-                  <% entries.forEach(e => { %>
-                    <tr style="border-bottom:1px solid var(--border);<%= e.unit_price === minPrice ? 'background:rgba(39,174,96,0.06)' : '' %>">
-                      <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem"><%= e.product_name %></td>
+                  <% entries.forEach((e, idx) => { %>
+                    <tr style="border-bottom:1px solid var(--border);<%= idx === 0 ? 'background:rgba(200,145,58,0.07)' : '' %>">
+                      <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem">
+                        <%= e.product_name %>
+                        <% if (idx === 0) { %><span style="background:var(--gold);color:#fff;font-size:0.65rem;padding:1px 5px;border-radius:10px;margin-left:4px">Aktuell</span><% } %>
+                      </td>
                       <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
-                      <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
+                      <td style="padding:5px 0;text-align:right;font-weight:<%= idx === 0 ? '700' : '400' %>">
                         <%= e.unit_price.toFixed(2).replace('.',',') %> € netto/<%= e.unit %>
                         <span style="display:block;font-size:0.72rem;color:var(--mid);font-weight:400">
                           <%= (e.unit_price * 1.07).toFixed(2).replace('.',',') %> € brutto
@@ -233,6 +242,8 @@ supplierNames.forEach(sup => {
 .product-prices { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
 .price-netto    { font-weight: 700; font-size: 0.95rem; color: var(--gold); white-space: nowrap; }
 .price-brutto   { font-size: 0.78rem; color: var(--mid); white-space: nowrap; }
+.trend-up       { color: #e74c3c; font-size: 0.85rem; font-weight: 700; }
+.trend-down     { color: #27ae60; font-size: 0.85rem; font-weight: 700; }
 .product-meta   { font-size: 0.78rem; color: var(--mid); }
 
 .alias-badge {
