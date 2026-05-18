@@ -27,31 +27,53 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 <% categories.forEach(cat => { %>
   <%
     const products = byCategory[cat];
-    const productNames = Object.keys(products);
+    const groupKeys = Object.keys(products);
   %>
   <div class="category-section" data-category="<%= cat %>">
     <div class="category-header" onclick="toggleCategory(this)">
       <span class="category-title"><%= cat %></span>
-      <span class="category-count"><%= productNames.length %></span>
+      <span class="category-count"><%= groupKeys.length %></span>
       <span class="category-chevron">▾</span>
     </div>
 
     <div class="category-body">
-      <% productNames.forEach(prodName => { %>
+      <% groupKeys.forEach(key => { %>
         <%
-          const entries   = products[prodName];
-          const prices    = entries.map(e => e.unit_price);
-          const minPrice  = Math.min(...prices);
-          const latest    = entries[0];
-          const allSame   = prices.every(p => p === minPrice);
+          const group    = products[key];
+          const entries  = group.entries;
+          const prices   = entries.map(e => e.unit_price);
+          const minPrice = Math.min(...prices);
+          const latest   = entries[0];
+          const allSame  = prices.every(p => p === minPrice);
+          const searchTerms = [group.displayName, ...group.originalNames].join(' ').toLowerCase();
         %>
-        <div class="product-card" data-name="<%= prodName.toLowerCase() %>">
+        <div class="product-card" data-name="<%= searchTerms %>">
           <div class="product-top">
-            <div class="product-name"><%= prodName %></div>
+            <div class="product-name">
+              <%= group.displayName %>
+              <% if (group.hasAlias) { %>
+                <span class="alias-badge">Oberbegriff</span>
+              <% } %>
+            </div>
+            <button type="button" class="alias-btn"
+              onclick="openAliasModal(
+                <%- JSON.stringify(group.displayName) %>,
+                <%- JSON.stringify(group.originalNames) %>,
+                <%= group.hasAlias %>
+              )" title="Oberbegriff bearbeiten">✏️</button>
             <div class="product-best-price">
               <%= minPrice.toFixed(2).replace('.',',') %> €/<%= latest.unit %>
             </div>
           </div>
+
+          <% if (group.originalNames.length > 1 || (group.originalNames.length === 1 && group.originalNames[0] !== group.displayName)) { %>
+            <div class="original-names">
+              <% group.originalNames.forEach(n => { %>
+                <span class="orig-tag"><%= n %></span>
+              <% }) %>
+            </div>
+          <% } %>
+
           <div class="product-supplier">
             <%= latest.supplier_name %> &nbsp;·&nbsp; <%= new Date(latest.date).toLocaleDateString('de-DE') %>
             <% if (!allSame) { %><span style="color:var(--gold);margin-left:4px">▾ günstigster</span><% } %>
@@ -64,6 +86,7 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
               <% entries.forEach(e => { %>
                 <tr style="border-bottom:1px solid var(--border);<%= e.unit_price === minPrice ? 'background:rgba(39,174,96,0.06)' : '' %>">
                   <td style="padding:5px 0"><%= e.supplier_name %></td>
+                  <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem"><%= e.product_name %></td>
                   <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
                   <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
                     <%= e.unit_price.toFixed(2).replace('.',',') %> €/<%= e.unit %>
@@ -80,6 +103,23 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 <% }) %>
 
 <% } %>
+
+<!-- Alias Modal -->
+<div id="alias-modal" role="dialog" aria-modal="true">
+  <div class="alias-modal-box">
+    <h3 style="margin:0 0 12px;font-size:1rem">Oberbegriff setzen</h3>
+    <p style="font-size:0.82rem;color:var(--mid);margin:0 0 8px">Originalnamen auf der Rechnung:</p>
+    <div id="alias-orig-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px"></div>
+    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px">Oberbegriff (z.B. Schrippe)</label>
+    <input type="text" id="alias-input" placeholder="Oberbegriff eingeben …"
+      style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;box-sizing:border-box;margin-bottom:16px" />
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="saveAlias()">Speichern</button>
+      <button class="btn-secondary" onclick="closeAliasModal()">Abbrechen</button>
+      <button class="btn-ghost" style="color:var(--danger,#e74c3c)" onclick="removeAlias()">Entfernen</button>
+    </div>
+  </div>
+</div>
 
 <style>
 .category-section { margin-bottom: 12px; }
@@ -118,9 +158,40 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
   gap: 8px;
   margin-bottom: 3px;
 }
-.product-name       { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; }
+.product-name       { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .product-best-price { font-weight: 700; font-size: 1rem; color: var(--gold); white-space: nowrap; }
 .product-supplier   { font-size: 0.78rem; color: var(--mid); }
+
+.alias-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--gold, #c9a84c);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+.alias-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  opacity: 0.45;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.alias-btn:hover { opacity: 1; }
+
+.original-names { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 5px; }
+.orig-tag {
+  font-size: 0.72rem;
+  background: #f4f4f4;
+  color: var(--mid);
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
 
 .price-history { margin-top: 8px; }
 .price-history summary {
@@ -134,11 +205,73 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 details[open] .price-history summary::before,
 .price-history[open] summary::before { content: '▾ '; }
 
-/* Search highlight */
 .product-card.hidden-search { display: none; }
+
+/* Modal */
+#alias-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#alias-modal.open { display: flex; }
+.alias-modal-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+}
 </style>
 
 <script>
+let _aliasNames = [];
+
+function openAliasModal(displayName, originalNames, hasAlias) {
+  _aliasNames = originalNames;
+  document.getElementById('alias-input').value = hasAlias ? displayName : '';
+  const tagsEl = document.getElementById('alias-orig-tags');
+  tagsEl.innerHTML = originalNames.map(n =>
+    `<span style="font-size:0.78rem;background:#f4f4f4;padding:3px 10px;border-radius:20px;border:1px solid var(--border)">${n}</span>`
+  ).join('');
+  document.getElementById('alias-modal').classList.add('open');
+  setTimeout(() => document.getElementById('alias-input').focus(), 50);
+}
+
+function closeAliasModal() {
+  document.getElementById('alias-modal').classList.remove('open');
+}
+
+document.getElementById('alias-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('alias-modal')) closeAliasModal();
+});
+
+async function saveAlias() {
+  const alias = document.getElementById('alias-input').value.trim();
+  if (!alias) { removeAlias(); return; }
+  await postAlias(alias);
+}
+
+async function removeAlias() {
+  await postAlias('');
+}
+
+async function postAlias(alias) {
+  const body = new URLSearchParams();
+  _aliasNames.forEach(n => body.append('product_names', n));
+  body.append('canonical_name', alias);
+  try {
+    const resp = await fetch('/einkauf/produkte/alias', { method: 'POST', body });
+    if (resp.ok) { closeAliasModal(); location.reload(); }
+    else { alert('Fehler beim Speichern.'); }
+  } catch { alert('Netzwerkfehler.'); }
+}
+
 function toggleCategory(header) {
   header.classList.toggle('collapsed');
   header.nextElementSibling.classList.toggle('hidden');
@@ -150,7 +283,6 @@ document.getElementById('product-search').addEventListener('input', function () 
     const name = card.dataset.name || '';
     card.classList.toggle('hidden-search', q.length > 0 && !name.includes(q));
   });
-  // Show/hide category sections based on visible products
   document.querySelectorAll('.category-section').forEach(section => {
     const visible = section.querySelectorAll('.product-card:not(.hidden-search)').length > 0;
     section.style.display = visible ? '' : 'none';

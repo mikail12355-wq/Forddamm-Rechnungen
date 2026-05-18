@@ -92,6 +92,8 @@ async function initDB() {
     );
   `);
 
+  // Migration: product aliases (canonical names across suppliers)
+  await db.execute("CREATE TABLE IF NOT EXISTS product_aliases (product_name TEXT PRIMARY KEY, canonical_name TEXT NOT NULL)").catch(() => {});
   // Migration: line_total for purchase_items (exact printed amount from invoice)
   await db.execute("ALTER TABLE purchase_items ADD COLUMN line_total REAL").catch(() => {});
   // Migration: category for purchase_items

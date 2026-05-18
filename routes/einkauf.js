@@ -50,28 +50,51 @@ router.get('/uploads/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Product list grouped by category
+// Product list grouped by category (with canonical name support)
 router.get('/produkte', async (req, res) => {
   const rows = await db.execute(`
     SELECT pit.product_name, pit.unit, pit.unit_price, pit.line_total, pit.quantity,
-           pit.category, s.name as supplier_name, pi.date, pi.id as invoice_id
+           pit.category, s.name as supplier_name, pi.date, pi.id as invoice_id,
+           COALESCE(pa.canonical_name, pit.product_name) as display_name
     FROM purchase_items pit
     JOIN purchase_invoices pi ON pit.purchase_invoice_id = pi.id
     JOIN suppliers s ON pi.supplier_id = s.id
-    ORDER BY pit.category ASC, pit.product_name ASC, pi.date DESC
+    LEFT JOIN product_aliases pa ON pit.product_name = pa.product_name
+    ORDER BY pit.category ASC, display_name ASC, pi.date DESC
   `);
 
-  // Group: category → product_name → entries[]
+  // Group: category → display_name → { displayName, originalNames[], hasAlias, entries[] }
   const byCategory = {};
   rows.rows.forEach(row => {
-    const cat  = row.category || 'Sonstiges';
-    const prod = row.product_name.trim();
+    const cat = row.category || 'Sonstiges';
+    const key = row.display_name;
     if (!byCategory[cat]) byCategory[cat] = {};
-    if (!byCategory[cat][prod]) byCategory[cat][prod] = [];
-    byCategory[cat][prod].push(row);
+    if (!byCategory[cat][key]) byCategory[cat][key] = { displayName: key, originalNames: [], hasAlias: false, entries: [] };
+    byCategory[cat][key].entries.push(row);
+    if (!byCategory[cat][key].originalNames.includes(row.product_name.trim()))
+      byCategory[cat][key].originalNames.push(row.product_name.trim());
+    if (row.display_name !== row.product_name) byCategory[cat][key].hasAlias = true;
   });
 
   res.render('einkauf/produkte', { title: 'Einkauf – Produkte', byCategory });
+});
+
+// Set / remove canonical alias for one or more product names
+router.post('/produkte/alias', async (req, res) => {
+  const names  = Array.isArray(req.body.product_names) ? req.body.product_names : (req.body.product_names ? [req.body.product_names] : []);
+  const alias  = (req.body.canonical_name || '').trim();
+  for (const name of names) {
+    if (!name.trim()) continue;
+    if (!alias) {
+      await db.execute('DELETE FROM product_aliases WHERE product_name = ?', [name.trim()]);
+    } else {
+      await db.execute(
+        'INSERT INTO product_aliases (product_name, canonical_name) VALUES (?, ?) ON CONFLICT(product_name) DO UPDATE SET canonical_name = excluded.canonical_name',
+        [name.trim(), alias]
+      );
+    }
+  }
+  res.json({ ok: true });
 });
 
 // Scan form
