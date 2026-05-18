@@ -47,6 +47,9 @@ Positionen wie "Pfand Bäckerkorb", "Pfand Kuchenblech" NICHT ins items-Array au
 WICHTIG – Mengenspalte:
 Wenn zwei Zahlen in der Mengenspalte stehen (z.B. "3,00 Stk. | 100"), ist die ERSTE die Bestellmenge.
 
+WICHTIG – Keine Zusammenfassung:
+Auch wenn dasselbe Produkt mehrmals auf der Rechnung vorkommt (z.B. in verschiedenen Lieferscheinen oder auf mehreren Seiten), liste JEDE Zeile als separaten Eintrag. Niemals gleichnamige Artikel zusammenfassen.
+
 Gib NUR das JSON zurück, keine Erklärungen, kein Markdown.
 
 Format:
@@ -130,17 +133,6 @@ async function extractInvoiceData(filePath, mimeType) {
       ? '{' + headerMatch[1] + '"items":'
       : '{"supplier_name":null,"invoice_number":null,"date":null,"items":';
     data = JSON.parse(header + partial + '}');
-  }
-
-  // Deduplicate: same product + same price within one invoice = one entry
-  if (Array.isArray(data.items)) {
-    const seen = new Set();
-    data.items = data.items.filter(item => {
-      const key = `${String(item.product_name || '').trim().toLowerCase()}__${item.unit_price}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
   }
 
   // Normalize
