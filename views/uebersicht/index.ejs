@@ -57,19 +57,25 @@
     Tageskasse (Ladengeschäft)
   </div>
   <div class="ub-cards">
+    <div class="ub-card">
+      <div class="ub-card-label">Umsatz 7% MwSt</div>
+      <div class="ub-card-value"><%= sumR7.toFixed(2).replace('.',',') %> € <span style="font-size:0.8rem;font-weight:400">brutto</span></div>
+      <div class="ub-card-sub">netto: <%= (sumR7/1.07).toFixed(2).replace('.',',') %> € &nbsp;·&nbsp; USt: <%= ladenUst7.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="ub-card">
+      <div class="ub-card-label">Umsatz 19% MwSt</div>
+      <div class="ub-card-value"><%= sumR19.toFixed(2).replace('.',',') %> € <span style="font-size:0.8rem;font-weight:400">brutto</span></div>
+      <div class="ub-card-sub">netto: <%= (sumR19/1.19).toFixed(2).replace('.',',') %> € &nbsp;·&nbsp; USt: <%= ladenUst19.toFixed(2).replace('.',',') %> €</div>
+    </div>
     <div class="ub-card ub-card-warn">
-      <div class="ub-card-label">Lotto-Anteil (weitergeleitet)</div>
+      <div class="ub-card-label">Lottokasse (weitergeleitet)</div>
       <div class="ub-card-value" style="color:#e67e22">− <%= sumLotto.toFixed(2).replace('.',',') %> €</div>
       <div class="ub-card-sub">Nicht im Umsatz enthalten</div>
     </div>
-    <div class="ub-card">
-      <div class="ub-card-label">Laden-Umsatz netto</div>
-      <div class="ub-card-value"><%= ladenNetto.toFixed(2).replace('.',',') %> €</div>
-    </div>
     <div class="ub-card ub-card-primary">
-      <div class="ub-card-label">Laden-Umsatz brutto</div>
-      <div class="ub-card-value"><%= ladenBrutto.toFixed(2).replace('.',',') %> €</div>
-      <div class="ub-card-sub">USt: <%= (ladenBrutto - ladenNetto).toFixed(2).replace('.',',') %> €</div>
+      <div class="ub-card-label">Laden-Umsatz gesamt</div>
+      <div class="ub-card-value"><%= ladenBrutto.toFixed(2).replace('.',',') %> € <span style="font-size:0.8rem;font-weight:400">brutto</span></div>
+      <div class="ub-card-sub">netto: <%= ladenNetto.toFixed(2).replace('.',',') %> € &nbsp;·&nbsp; USt: <%= (ladenBrutto - ladenNetto).toFixed(2).replace('.',',') %> €</div>
     </div>
   </div>
 </div>

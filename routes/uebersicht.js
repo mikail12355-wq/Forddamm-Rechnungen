@@ -41,7 +41,9 @@ router.get('/', w(async (req, res) => {
       ${invFilter}
     `, invArgs),
     db.execute(`
-      SELECT SUM(total_cash) as sum_cash, SUM(lotto_revenue) as sum_lotto
+      SELECT SUM(revenue_7)  as sum_r7,
+             SUM(revenue_19) as sum_r19,
+             SUM(lotto_revenue) as sum_lotto
       FROM daily_cash
       ${cashFilter}
     `, cashArgs),
@@ -61,10 +63,13 @@ router.get('/', w(async (req, res) => {
   const liefBrutto = liefNetto * 1.07;
 
   // Tageskasse
-  const sumCash     = Number(cashRes.rows[0]?.sum_cash)   || 0;
-  const sumLotto    = Number(cashRes.rows[0]?.sum_lotto)  || 0;
-  const ladenBrutto = sumCash - sumLotto;
-  const ladenNetto  = ladenBrutto / 1.07;
+  const sumR7       = Number(cashRes.rows[0]?.sum_r7)    || 0;
+  const sumR19      = Number(cashRes.rows[0]?.sum_r19)   || 0;
+  const sumLotto    = Number(cashRes.rows[0]?.sum_lotto) || 0;
+  const ladenBrutto = sumR7 + sumR19;
+  const ladenNetto  = sumR7 / 1.07 + sumR19 / 1.19;
+  const ladenUst7   = sumR7  - sumR7  / 1.07;
+  const ladenUst19  = sumR19 - sumR19 / 1.19;
 
   // Gesamt (Lotto already excluded from Laden figures)
   const gesamtBrutto = liefBrutto + ladenBrutto;
@@ -74,7 +79,7 @@ router.get('/', w(async (req, res) => {
     title: 'Gesamtüberblick',
     year, period, years,
     liefNetto, liefBrutto,
-    ladenBrutto, ladenNetto, sumLotto,
+    sumR7, sumR19, ladenBrutto, ladenNetto, ladenUst7, ladenUst19, sumLotto,
     gesamtBrutto, gesamtNetto
   });
 }));

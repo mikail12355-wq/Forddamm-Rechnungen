@@ -118,6 +118,10 @@ async function initDB() {
     )
   `).catch(() => {});
 
+  // Migration: VAT breakdown columns for Tageskasse
+  await db.execute("ALTER TABLE daily_cash ADD COLUMN revenue_7  REAL NOT NULL DEFAULT 0").catch(() => {});
+  await db.execute("ALTER TABLE daily_cash ADD COLUMN revenue_19 REAL NOT NULL DEFAULT 0").catch(() => {});
+
   // Indexes for JOIN and ORDER BY performance
   await db.executeMultiple(`
     CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);

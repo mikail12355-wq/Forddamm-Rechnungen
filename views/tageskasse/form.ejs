@@ -3,87 +3,136 @@
   <a href="/tageskasse" class="btn-secondary">← Zurück</a>
 </div>
 
-<form action="<%= entry ? '/tageskasse/' + entry.id + '/bearbeiten' : '/tageskasse/neu' %>" method="POST" class="card" style="max-width:520px">
-  <h3 class="card-title">Tageseinnahmen</h3>
+<form action="<%= entry ? '/tageskasse/' + entry.id + '/bearbeiten' : '/tageskasse/neu' %>" method="POST" style="max-width:560px">
 
-  <div class="form-grid">
-    <div class="form-group">
+  <div class="card">
+    <h3 class="card-title">Datum</h3>
+    <div class="form-group" style="max-width:220px">
       <label>Datum <span class="required">*</span></label>
       <input type="date" name="date" value="<%= entry ? entry.date : today %>" required />
     </div>
-
-    <div class="form-group">
-      <label>Kasseneinnahmen gesamt (brutto) <span class="required">*</span></label>
-      <div style="position:relative">
-        <input type="text" name="total_cash" id="total_cash"
-               value="<%= entry ? Number(entry.total_cash).toFixed(2).replace('.',',') : '' %>"
-               placeholder="0,00" required
-               style="padding-right:28px"
-               oninput="updatePreview()" />
-        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--mid)">€</span>
-      </div>
-      <small style="color:var(--mid);font-size:0.78rem">Gesamtbetrag aus der Kasse inkl. Lotto</small>
-    </div>
-
-    <div class="form-group">
-      <label>davon Lotto-Einnahmen</label>
-      <div style="position:relative">
-        <input type="text" name="lotto_revenue" id="lotto_revenue"
-               value="<%= entry ? Number(entry.lotto_revenue).toFixed(2).replace('.',',') : '0,00' %>"
-               placeholder="0,00"
-               style="padding-right:28px"
-               oninput="updatePreview()" />
-        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--mid)">€</span>
-      </div>
-      <small style="color:var(--mid);font-size:0.78rem">Wird vom Umsatz abgezogen und an Lotto weitergeleitet</small>
-    </div>
   </div>
 
-  <!-- Live preview -->
-  <div id="preview-box" style="background:#f9f5ef;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin:16px 0">
-    <div style="font-size:0.75rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Vorschau</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div>
-        <div style="font-size:0.72rem;color:var(--mid)">Laden-Umsatz brutto</div>
-        <div id="prev-brutto" style="font-weight:700;font-size:1.05rem">0,00 €</div>
+  <div class="card">
+    <h3 class="card-title">Umsätze (vom Z-Bon)</h3>
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Umsatz 7% MwSt (brutto)</label>
+        <div class="input-euro">
+          <input type="text" name="revenue_7" id="revenue_7"
+                 value="<%= entry ? Number(entry.revenue_7).toFixed(2).replace('.',',') : '' %>"
+                 placeholder="0,00" oninput="updatePreview()" />
+          <span>€</span>
+        </div>
+        <small>Lebensmittel, Backwaren</small>
       </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--mid)">Laden-Umsatz netto (7% USt)</div>
-        <div id="prev-netto" style="font-weight:700;font-size:1.05rem">0,00 €</div>
+
+      <div class="form-group">
+        <label>Umsatz 19% MwSt (brutto)</label>
+        <div class="input-euro">
+          <input type="text" name="revenue_19" id="revenue_19"
+                 value="<%= entry ? Number(entry.revenue_19).toFixed(2).replace('.',',') : '' %>"
+                 placeholder="0,00" oninput="updatePreview()" />
+          <span>€</span>
+        </div>
+        <small>Sonstige Produkte</small>
       </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--mid)">Lotto-Anteil (abgezogen)</div>
-        <div id="prev-lotto" style="font-weight:700;font-size:1.05rem;color:#e67e22">0,00 €</div>
+
+      <div class="form-group">
+        <label>Lottokasse</label>
+        <div class="input-euro">
+          <input type="text" name="lotto_revenue" id="lotto_revenue"
+                 value="<%= entry ? Number(entry.lotto_revenue).toFixed(2).replace('.',',') : '' %>"
+                 placeholder="0,00" oninput="updatePreview()" />
+          <span>€</span>
+        </div>
+        <small>Wird vom Umsatz abgezogen</small>
       </div>
+
     </div>
   </div>
 
-  <div class="form-group">
-    <label>Notiz (intern)</label>
-    <input type="text" name="notes" value="<%= entry ? entry.notes : '' %>" placeholder="z.B. Feiertag, Sonderverkauf …" />
+  <!-- Live-Vorschau -->
+  <div class="card" style="background:#f9f5ef;border-color:var(--border)">
+    <h3 class="card-title" style="color:var(--gold)">Vorschau Tagesabschluss</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+      <div class="preview-block">
+        <div class="preview-label">Umsatz 7% — netto</div>
+        <div class="preview-value" id="p-netto7">0,00 €</div>
+        <div class="preview-sub" id="p-ust7">USt: 0,00 €</div>
+      </div>
+
+      <div class="preview-block">
+        <div class="preview-label">Umsatz 19% — netto</div>
+        <div class="preview-value" id="p-netto19">0,00 €</div>
+        <div class="preview-sub" id="p-ust19">USt: 0,00 €</div>
+      </div>
+
+      <div class="preview-block preview-warn">
+        <div class="preview-label">Lottokasse (abgezogen)</div>
+        <div class="preview-value" id="p-lotto" style="color:#e67e22">0,00 €</div>
+      </div>
+
+      <div class="preview-block preview-total">
+        <div class="preview-label">Laden-Umsatz gesamt</div>
+        <div class="preview-value" id="p-brutto" style="font-size:1.2rem">0,00 €</div>
+        <div class="preview-sub" id="p-netto">netto: 0,00 €</div>
+      </div>
+
+    </div>
   </div>
 
-  <div style="display:flex;gap:12px;margin-top:8px">
+  <div class="card">
+    <h3 class="card-title">Notiz (intern)</h3>
+    <input type="text" name="notes" value="<%= entry ? entry.notes : '' %>"
+           placeholder="z.B. Feiertag, Sonderverkauf …" />
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:40px">
     <button type="submit" class="btn-primary btn-lg"><%= entry ? 'Speichern' : 'Eintragen' %></button>
     <a href="/tageskasse" class="btn-secondary btn-lg">Abbrechen</a>
   </div>
 </form>
 
+<style>
+.input-euro { position:relative; }
+.input-euro input { padding-right:28px; width:100%; box-sizing:border-box; }
+.input-euro span  { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--mid); pointer-events:none; }
+.form-group small { font-size:0.75rem; color:var(--mid); display:block; margin-top:3px; }
+
+.preview-block { background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px 16px; }
+.preview-warn  { border-color:#f0a04b; background:#fffaf4; }
+.preview-total { border-color:var(--gold); background:#fff; }
+.preview-label { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--mid); margin-bottom:5px; }
+.preview-value { font-size:1.05rem; font-weight:700; color:var(--dark); }
+.preview-sub   { font-size:0.78rem; color:var(--mid); margin-top:3px; }
+</style>
+
 <script>
-function parseDE(val) {
-  return parseFloat(String(val).replace(',', '.')) || 0;
-}
-function fmtDE(n) {
-  return n.toFixed(2).replace('.', ',') + ' €';
-}
+function parseDE(val) { return parseFloat(String(val || '').replace(',', '.')) || 0; }
+function fmtDE(n)     { return n.toFixed(2).replace('.', ',') + ' €'; }
+
 function updatePreview() {
-  const cash  = parseDE(document.getElementById('total_cash').value);
+  const r7    = parseDE(document.getElementById('revenue_7').value);
+  const r19   = parseDE(document.getElementById('revenue_19').value);
   const lotto = parseDE(document.getElementById('lotto_revenue').value);
-  const brutto = Math.max(0, cash - lotto);
-  const netto  = brutto / 1.07;
-  document.getElementById('prev-brutto').textContent = fmtDE(brutto);
-  document.getElementById('prev-netto').textContent  = fmtDE(netto);
-  document.getElementById('prev-lotto').textContent  = fmtDE(lotto);
+
+  const netto7  = r7  / 1.07;
+  const ust7    = r7  - netto7;
+  const netto19 = r19 / 1.19;
+  const ust19   = r19 - netto19;
+  const brutto  = r7 + r19;
+  const netto   = netto7 + netto19;
+
+  document.getElementById('p-netto7').textContent  = fmtDE(netto7);
+  document.getElementById('p-ust7').textContent    = 'USt: ' + fmtDE(ust7);
+  document.getElementById('p-netto19').textContent = fmtDE(netto19);
+  document.getElementById('p-ust19').textContent   = 'USt: ' + fmtDE(ust19);
+  document.getElementById('p-lotto').textContent   = fmtDE(lotto);
+  document.getElementById('p-brutto').textContent  = fmtDE(brutto);
+  document.getElementById('p-netto').textContent   = 'netto: ' + fmtDE(netto);
 }
 updatePreview();
 </script>
