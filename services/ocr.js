@@ -1,4 +1,4 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
 
@@ -47,7 +47,7 @@ Positionen wie "Pfand Bäckerkorb", "Pfand Kuchenblech" NICHT ins items-Array au
 WICHTIG – Mengenspalte:
 Wenn zwei Zahlen in der Mengenspalte stehen (z.B. "3,00 Stk. | 100"), ist die ERSTE die Bestellmenge.
 
-Gib NUR das JSON zurück, keine Erklärungen.
+Gib NUR das JSON zurück, keine Erklärungen, kein Markdown.
 
 Format:
 {
@@ -66,59 +66,49 @@ async function extractTextFromPdf(filePath) {
 }
 
 async function extractInvoiceData(filePath, mimeType) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY nicht konfiguriert.');
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY nicht konfiguriert.');
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
+  });
 
-  let messages;
+  let parts;
 
   if (mimeType === 'application/pdf') {
-    // Extract text from PDF — much more token-efficient than sending binary
     const pdfText = await extractTextFromPdf(filePath);
     console.log(`[OCR] PDF-Text extrahiert: ${pdfText.trim().length} Zeichen`);
 
     if (pdfText.trim().length < 100) {
-      // Scanned PDF (no extractable text) — fall back to sending as document
-      console.log('[OCR] Gescanntes PDF erkannt → sende als Base64-Dokument');
+      console.log('[OCR] Gescanntes PDF → sende als Base64');
       const base64Data = fs.readFileSync(filePath).toString('base64');
-      messages = [{
-        role: 'user',
-        content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
-          { type: 'text', text: EXTRACT_PROMPT }
-        ]
-      }];
+      parts = [
+        { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+        { text: EXTRACT_PROMPT }
+      ];
     } else {
-      // Text-based PDF — send extracted text directly
-      console.log('[OCR] Text-PDF erkannt → sende als Text');
-      messages = [{
-        role: 'user',
-        content: `${EXTRACT_PROMPT}\n\n--- RECHNUNGSTEXT ---\n${pdfText}`
-      }];
+      console.log('[OCR] Text-PDF → sende als Text');
+      parts = [{ text: `${EXTRACT_PROMPT}\n\n--- RECHNUNGSTEXT ---\n${pdfText}` }];
     }
   } else {
-    // Image — send as vision request
     const base64Data = fs.readFileSync(filePath).toString('base64');
     const allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     const mediaType  = allowed.includes(mimeType) ? mimeType : 'image/jpeg';
-    messages = [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-        { type: 'text', text: EXTRACT_PROMPT }
-      ]
-    }];
+    parts = [
+      { inlineData: { mimeType: mediaType, data: base64Data } },
+      { text: EXTRACT_PROMPT }
+    ];
   }
 
-  console.log('[OCR] Sende Anfrage an Claude (streaming)...');
-  const stream   = client.messages.stream({ model: 'claude-sonnet-4-6', max_tokens: 32000, messages });
-  const response = await stream.finalMessage();
-  console.log(`[OCR] Antwort erhalten: ${response.content[0].text.length} Zeichen, stop_reason: ${response.stop_reason}`);
+  console.log('[OCR] Sende Anfrage an Gemini...');
+  const result = await model.generateContent(parts);
+  const text   = result.response.text().trim();
+  console.log(`[OCR] Antwort erhalten: ${text.length} Zeichen`);
 
-  const text       = response.content[0].text.trim();
-  const jsonMatch  = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Keine strukturierten Daten erkannt');
 
   let data;
@@ -130,10 +120,10 @@ async function extractInvoiceData(filePath, mimeType) {
     const itemsMatch = raw.match(/"items"\s*:\s*(\[[\s\S]*)/);
     if (!itemsMatch) throw new Error('JSON konnte nicht verarbeitet werden');
 
-    let partial       = itemsMatch[1];
-    const lastBrace   = partial.lastIndexOf('}');
+    let partial     = itemsMatch[1];
+    const lastBrace = partial.lastIndexOf('}');
     if (lastBrace === -1) throw new Error('Keine vollständigen Positionen erkannt');
-    partial           = partial.substring(0, lastBrace + 1) + ']';
+    partial         = partial.substring(0, lastBrace + 1) + ']';
 
     const headerMatch = raw.match(/^\s*\{([\s\S]*?)"items"/);
     const header      = headerMatch
@@ -173,7 +163,7 @@ async function extractInvoiceData(filePath, mimeType) {
     data.items = [];
   }
 
-  console.log(`[OCR] Extrahierte Positionen nach Bereinigung: ${data.items ? data.items.length : 0}`);
+  console.log(`[OCR] Extrahierte Positionen nach Bereinigung: ${data.items.length}`);
   return data;
 }
 
