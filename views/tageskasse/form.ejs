@@ -1,0 +1,89 @@
+<div class="page-header">
+  <h2><%= entry ? 'Tageskasse bearbeiten' : 'Tageskasse – Neuer Eintrag' %></h2>
+  <a href="/tageskasse" class="btn-secondary">← Zurück</a>
+</div>
+
+<form action="<%= entry ? '/tageskasse/' + entry.id + '/bearbeiten' : '/tageskasse/neu' %>" method="POST" class="card" style="max-width:520px">
+  <h3 class="card-title">Tageseinnahmen</h3>
+
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Datum <span class="required">*</span></label>
+      <input type="date" name="date" value="<%= entry ? entry.date : today %>" required />
+    </div>
+
+    <div class="form-group">
+      <label>Kasseneinnahmen gesamt (brutto) <span class="required">*</span></label>
+      <div style="position:relative">
+        <input type="text" name="total_cash" id="total_cash"
+               value="<%= entry ? Number(entry.total_cash).toFixed(2).replace('.',',') : '' %>"
+               placeholder="0,00" required
+               style="padding-right:28px"
+               oninput="updatePreview()" />
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--mid)">€</span>
+      </div>
+      <small style="color:var(--mid);font-size:0.78rem">Gesamtbetrag aus der Kasse inkl. Lotto</small>
+    </div>
+
+    <div class="form-group">
+      <label>davon Lotto-Einnahmen</label>
+      <div style="position:relative">
+        <input type="text" name="lotto_revenue" id="lotto_revenue"
+               value="<%= entry ? Number(entry.lotto_revenue).toFixed(2).replace('.',',') : '0,00' %>"
+               placeholder="0,00"
+               style="padding-right:28px"
+               oninput="updatePreview()" />
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--mid)">€</span>
+      </div>
+      <small style="color:var(--mid);font-size:0.78rem">Wird vom Umsatz abgezogen und an Lotto weitergeleitet</small>
+    </div>
+  </div>
+
+  <!-- Live preview -->
+  <div id="preview-box" style="background:#f9f5ef;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin:16px 0">
+    <div style="font-size:0.75rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Vorschau</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <div style="font-size:0.72rem;color:var(--mid)">Laden-Umsatz brutto</div>
+        <div id="prev-brutto" style="font-weight:700;font-size:1.05rem">0,00 €</div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;color:var(--mid)">Laden-Umsatz netto (7% USt)</div>
+        <div id="prev-netto" style="font-weight:700;font-size:1.05rem">0,00 €</div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;color:var(--mid)">Lotto-Anteil (abgezogen)</div>
+        <div id="prev-lotto" style="font-weight:700;font-size:1.05rem;color:#e67e22">0,00 €</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Notiz (intern)</label>
+    <input type="text" name="notes" value="<%= entry ? entry.notes : '' %>" placeholder="z.B. Feiertag, Sonderverkauf …" />
+  </div>
+
+  <div style="display:flex;gap:12px;margin-top:8px">
+    <button type="submit" class="btn-primary btn-lg"><%= entry ? 'Speichern' : 'Eintragen' %></button>
+    <a href="/tageskasse" class="btn-secondary btn-lg">Abbrechen</a>
+  </div>
+</form>
+
+<script>
+function parseDE(val) {
+  return parseFloat(String(val).replace(',', '.')) || 0;
+}
+function fmtDE(n) {
+  return n.toFixed(2).replace('.', ',') + ' €';
+}
+function updatePreview() {
+  const cash  = parseDE(document.getElementById('total_cash').value);
+  const lotto = parseDE(document.getElementById('lotto_revenue').value);
+  const brutto = Math.max(0, cash - lotto);
+  const netto  = brutto / 1.07;
+  document.getElementById('prev-brutto').textContent = fmtDE(brutto);
+  document.getElementById('prev-netto').textContent  = fmtDE(netto);
+  document.getElementById('prev-lotto').textContent  = fmtDE(lotto);
+}
+updatePreview();
+</script>

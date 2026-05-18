@@ -106,6 +106,18 @@ async function initDB() {
   await db.execute("ALTER TABLE invoices ADD COLUMN paid INTEGER DEFAULT 0").catch(() => {});
   await db.execute("ALTER TABLE invoices ADD COLUMN paid_at TEXT DEFAULT ''").catch(() => {});
 
+  // Migration: daily cash register (Tageskasse)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS daily_cash (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      date          TEXT NOT NULL UNIQUE,
+      total_cash    REAL NOT NULL DEFAULT 0,
+      lotto_revenue REAL NOT NULL DEFAULT 0,
+      notes         TEXT DEFAULT '',
+      created_at    TEXT DEFAULT (datetime('now'))
+    )
+  `).catch(() => {});
+
   // Indexes for JOIN and ORDER BY performance
   await db.executeMultiple(`
     CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);
@@ -116,6 +128,7 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id    ON invoice_items(invoice_id);
     CREATE INDEX IF NOT EXISTS idx_invoices_date               ON invoices(date DESC);
     CREATE INDEX IF NOT EXISTS idx_invoices_number             ON invoices(invoice_number);
+    CREATE INDEX IF NOT EXISTS idx_daily_cash_date             ON daily_cash(date DESC);
   `);
 
   const adminRes = await db.execute('SELECT id FROM users WHERE username = ?', ['admin']);

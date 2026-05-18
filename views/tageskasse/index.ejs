@@ -1,0 +1,115 @@
+<div class="page-header">
+  <h2>Tageskasse</h2>
+  <a href="/tageskasse/neu" class="btn-primary">+ Neuer Eintrag</a>
+</div>
+
+<!-- Filter -->
+<form method="GET" action="/tageskasse" class="filter-bar" style="margin-bottom:20px">
+  <select name="year" onchange="this.form.submit()">
+    <option value="all" <%= year === 'all' ? 'selected' : '' %>>Alle Jahre</option>
+    <% years.forEach(y => { %>
+      <option value="<%= y %>" <%= year === y ? 'selected' : '' %>><%= y %></option>
+    <% }) %>
+  </select>
+  <select name="month" onchange="this.form.submit()">
+    <option value="all" <%= month === 'all' ? 'selected' : '' %>>Alle Monate</option>
+    <% MONTHS.forEach((m, i) => { %>
+      <option value="<%= i+1 %>" <%= String(month) === String(i+1) ? 'selected' : '' %>><%= m %></option>
+    <% }) %>
+  </select>
+</form>
+
+<!-- Summary cards -->
+<% if (entries.length > 0) { %>
+<div class="stats-grid" style="margin-bottom:24px">
+  <div class="stat-card">
+    <div class="stat-label">Kasseneinnahmen gesamt (brutto)</div>
+    <div class="stat-value"><%= sumCash.toFixed(2).replace('.',',') %> €</div>
+  </div>
+  <div class="stat-card stat-card-warn">
+    <div class="stat-label">Lotto-Anteil (weitergeleitet)</div>
+    <div class="stat-value" style="color:#e67e22">− <%= sumLotto.toFixed(2).replace('.',',') %> €</div>
+  </div>
+  <div class="stat-card stat-card-green">
+    <div class="stat-label">Laden brutto (ohne Lotto)</div>
+    <div class="stat-value"><%= ladenBrutto.toFixed(2).replace('.',',') %> €</div>
+    <div class="stat-sub">Netto: <%= ladenNetto.toFixed(2).replace('.',',') %> €</div>
+  </div>
+</div>
+<% } %>
+
+<!-- Table -->
+<div class="card" style="padding:0">
+  <% if (entries.length === 0) { %>
+    <p class="empty-state" style="padding:32px">Noch keine Einträge.
+      <a href="/tageskasse/neu">Ersten Eintrag anlegen</a>
+    </p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Datum</th>
+        <th style="text-align:right">Kasseneinnahmen</th>
+        <th style="text-align:right">davon Lotto</th>
+        <th style="text-align:right">Laden netto</th>
+        <th style="text-align:right">Laden brutto</th>
+        <th>Notiz</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% entries.forEach(e => {
+           const cash  = Number(e.total_cash);
+           const lotto = Number(e.lotto_revenue);
+           const brutto = cash - lotto;
+           const netto  = brutto / 1.07;
+      %>
+      <tr>
+        <td><strong><%= new Date(e.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' }) %></strong></td>
+        <td style="text-align:right"><%= cash.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right;color:<%= lotto > 0 ? '#e67e22' : 'var(--mid)' %>">
+          <%= lotto > 0 ? '− ' + lotto.toFixed(2).replace('.',',') + ' €' : '—' %>
+        </td>
+        <td style="text-align:right"><%= netto.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right;font-weight:700"><%= brutto.toFixed(2).replace('.',',') %> €</td>
+        <td style="color:var(--mid);font-size:0.82rem"><%= e.notes || '' %></td>
+        <td>
+          <div class="action-links">
+            <a href="/tageskasse/<%= e.id %>/bearbeiten">Bearbeiten</a>
+            <form action="/tageskasse/<%= e.id %>/loeschen" method="POST" style="display:inline"
+                  onsubmit="return confirm('Eintrag wirklich löschen?')">
+              <button type="submit" class="link-danger">Löschen</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td style="font-weight:700">Summe</td>
+        <td style="text-align:right;font-weight:700"><%= sumCash.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right;font-weight:700;color:#e67e22"><%= sumLotto > 0 ? '− ' + sumLotto.toFixed(2).replace('.',',') + ' €' : '—' %></td>
+        <td style="text-align:right;font-weight:700"><%= ladenNetto.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right;font-weight:700"><%= ladenBrutto.toFixed(2).replace('.',',') %> €</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <% } %>
+</div>
+
+<style>
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.stat-card-warn  { border-color: #f0a04b; background: #fffaf4; }
+.stat-card-green { border-color: #6fcf97; background: #f4fcf7; }
+.stat-label { font-size: 0.75rem; color: var(--mid); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.stat-value { font-size: 1.35rem; font-weight: 700; color: var(--dark); }
+.stat-sub   { font-size: 0.82rem; color: var(--mid); margin-top: 4px; }
+</style>
