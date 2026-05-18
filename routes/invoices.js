@@ -108,7 +108,8 @@ router.get('/neu', w(async (req, res) => {
 
 router.post('/neu', w(async (req, res) => {
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
+          order_number, notes, delivery_contact, item_name, item_qty, item_price,
+          payment_method } = req.body;
 
   if (!invoice_number || !date || !customer_id) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
@@ -126,9 +127,9 @@ router.post('/neu', w(async (req, res) => {
   }
 
   const invRes = await db.execute(
-    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', delivery_contact||'']
+    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, payment_method)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', delivery_contact||'', payment_method === 'cash' ? 'cash' : 'transfer']
   );
   const invoiceId = Number(invRes.lastInsertRowid);
 
@@ -199,7 +200,8 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, item_name, item_qty, item_price } = req.body;
+          order_number, notes, delivery_contact, item_name, item_qty, item_price,
+          payment_method } = req.body;
 
   const validItems = parseItems(item_name, item_qty, item_price);
   if (!validItems.length) {
@@ -208,9 +210,9 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
   }
   await db.execute(
     `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?,
-     customer_id=?, order_number=?, notes=?, delivery_contact=? WHERE id=?`,
+     customer_id=?, order_number=?, notes=?, delivery_contact=?, payment_method=? WHERE id=?`,
     [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id,
-     order_number||'', notes||'', delivery_contact||'', +req.params.id]
+     order_number||'', notes||'', delivery_contact||'', payment_method === 'cash' ? 'cash' : 'transfer', +req.params.id]
   );
   await db.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [+req.params.id]);
   for (let i = 0; i < validItems.length; i++) {

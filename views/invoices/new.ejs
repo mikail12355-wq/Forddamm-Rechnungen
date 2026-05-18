@@ -48,6 +48,21 @@
         <label>Bestellnummer</label>
         <input type="text" name="order_number" value="<%= editInvoice ? editInvoice.order_number : '' %>" placeholder="z.B. 4500045353" />
       </div>
+      <div class="form-group">
+        <label>Zahlungsart</label>
+        <div class="delivery-toggle">
+          <label class="toggle-option">
+            <input type="radio" name="payment_method" value="transfer"
+              <%= (!editInvoice || editInvoice.payment_method !== 'cash') ? 'checked' : '' %> />
+            Überweisung
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="payment_method" value="cash"
+              <%= (editInvoice && editInvoice.payment_method === 'cash') ? 'checked' : '' %> />
+            Barzahlung
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 

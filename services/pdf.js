@@ -211,23 +211,26 @@ function generatePDF(invoice, items, stream) {
      .text('ZAHLUNGSINFORMATIONEN', mL, y, { lineBreak: false });
   y += 13;
 
-  const p1 = mL, p2 = mL + 200, p3 = mL + 355;
-
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7);
-  doc.text('IBAN',        p1, y, { lineBreak: false });
-  doc.text('BIC',         p2, y, { lineBreak: false });
-  doc.text('ZAHLUNGSART', p3, y, { lineBreak: false });
-  y += 11;
-
-  doc.fillColor(C.dark).font('Helvetica').fontSize(9);
-  doc.text('DE67 1005 0000 0191 3708 27', p1, y, { lineBreak: false });
-  doc.text('BELADEBXXX',                  p2, y, { lineBreak: false });
-  doc.text('Überweisung',                 p3, y, { lineBreak: false });
-  y += 15;
-
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('KONTOINHABER', p1, y, { lineBreak: false });
-  y += 11;
-  doc.fillColor(C.dark).font('Helvetica').fontSize(9).text('Murat Öztürk', p1, y, { lineBreak: false });
+  if (invoice.payment_method === 'cash') {
+    doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('ZAHLUNGSART', mL, y, { lineBreak: false });
+    y += 11;
+    doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text('Barzahlung', mL, y, { lineBreak: false });
+  } else {
+    const p1 = mL, p2 = mL + 200, p3 = mL + 355;
+    doc.fillColor(C.gray).font('Helvetica').fontSize(7);
+    doc.text('IBAN',        p1, y, { lineBreak: false });
+    doc.text('BIC',         p2, y, { lineBreak: false });
+    doc.text('ZAHLUNGSART', p3, y, { lineBreak: false });
+    y += 11;
+    doc.fillColor(C.dark).font('Helvetica').fontSize(9);
+    doc.text('DE67 1005 0000 0191 3708 27', p1, y, { lineBreak: false });
+    doc.text('BELADEBXXX',                  p2, y, { lineBreak: false });
+    doc.text('Überweisung',                 p3, y, { lineBreak: false });
+    y += 15;
+    doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('KONTOINHABER', p1, y, { lineBreak: false });
+    y += 11;
+    doc.fillColor(C.dark).font('Helvetica').fontSize(9).text('Murat Öztürk', p1, y, { lineBreak: false });
+  }
 
   // Seitenfuss letzte Seite
   drawFooter(doc);

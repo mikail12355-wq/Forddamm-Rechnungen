@@ -107,13 +107,17 @@
 
   <!-- Payment -->
   <div class="inv-payment">
-    <p>Bitte Überweisen Sie den gesamten Betrag auf folgendes Konto:</p>
-    <table>
-      <tr><td>BIC</td><td>BELADEBXXX</td></tr>
-      <tr><td>IBAN</td><td>DE67 1005 0000 0191 3708 27</td></tr>
-      <tr><td>Inhaber:</td><td>Murat Öztürk</td></tr>
-    </table>
-    <p><strong>Zahlungsart:</strong> Überweisung</p>
+    <% if (invoice.payment_method === 'cash') { %>
+      <p><strong>Zahlungsart:</strong> Barzahlung</p>
+    <% } else { %>
+      <p>Bitte Überweisen Sie den gesamten Betrag auf folgendes Konto:</p>
+      <table>
+        <tr><td>BIC</td><td>BELADEBXXX</td></tr>
+        <tr><td>IBAN</td><td>DE67 1005 0000 0191 3708 27</td></tr>
+        <tr><td>Inhaber:</td><td>Murat Öztürk</td></tr>
+      </table>
+      <p><strong>Zahlungsart:</strong> Überweisung</p>
+    <% } %>
   </div>
 
   <div class="inv-footer">SteuerNr.20/460/01995</div>
