@@ -76,8 +76,9 @@ supplierNames.forEach(sup => {
                     <%- JSON.stringify(group.originalNames) %>,
                     <%= group.hasAlias %>
                   )" title="Oberbegriff bearbeiten">✏️</button>
-                <div class="product-best-price">
-                  <%= minPrice.toFixed(2).replace('.',',') %> €/<%= latest.unit %>
+                <div class="product-prices">
+                  <span class="price-netto"><%= minPrice.toFixed(2).replace('.',',') %> € netto/<%= latest.unit %></span>
+                  <span class="price-brutto"><%= (minPrice * 1.07).toFixed(2).replace('.',',') %> € brutto</span>
                 </div>
               </div>
 
@@ -103,7 +104,10 @@ supplierNames.forEach(sup => {
                       <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem"><%= e.product_name %></td>
                       <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
                       <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
-                        <%= e.unit_price.toFixed(2).replace('.',',') %> €/<%= e.unit %>
+                        <%= e.unit_price.toFixed(2).replace('.',',') %> € netto/<%= e.unit %>
+                        <span style="display:block;font-size:0.72rem;color:var(--mid);font-weight:400">
+                          <%= (e.unit_price * 1.07).toFixed(2).replace('.',',') %> € brutto
+                        </span>
                       </td>
                     </tr>
                   <% }) %>
@@ -225,9 +229,11 @@ supplierNames.forEach(sup => {
   gap: 8px;
   margin-bottom: 3px;
 }
-.product-name       { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.product-best-price { font-weight: 700; font-size: 1rem; color: var(--gold); white-space: nowrap; }
-.product-meta       { font-size: 0.78rem; color: var(--mid); }
+.product-name   { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.product-prices { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.price-netto    { font-weight: 700; font-size: 0.95rem; color: var(--gold); white-space: nowrap; }
+.price-brutto   { font-size: 0.78rem; color: var(--mid); white-space: nowrap; }
+.product-meta   { font-size: 0.78rem; color: var(--mid); }
 
 .alias-badge {
   font-size: 0.65rem;
