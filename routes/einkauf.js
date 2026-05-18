@@ -159,7 +159,7 @@ router.get('/', async (req, res) => {
   const invoices = await db.execute(`
     SELECT pi.*, s.name as supplier_name,
            COUNT(pit.id) as item_count,
-           SUM(pit.quantity * pit.unit_price) as total
+           SUM(COALESCE(pit.line_total, pit.quantity * pit.unit_price)) as total
     FROM purchase_invoices pi
     LEFT JOIN suppliers s ON pi.supplier_id = s.id
     LEFT JOIN purchase_items pit ON pit.purchase_invoice_id = pi.id
