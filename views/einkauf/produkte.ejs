@@ -4,98 +4,114 @@
 </div>
 
 <%
-const categories = Object.keys(byCategory);
-const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c]).length, 0);
+let totalProducts = 0;
+supplierNames.forEach(sup => {
+  Object.keys(bySupplier[sup]).forEach(cat => {
+    totalProducts += Object.keys(bySupplier[sup][cat]).length;
+  });
+});
 %>
 
-<% if (totalProducts === 0) { %>
+<% if (supplierNames.length === 0) { %>
   <div class="card">
     <p class="empty-state">Noch keine Produkte. <a href="/einkauf/scan">Erste Rechnung scannen</a></p>
   </div>
 <% } else { %>
 
-<!-- Search -->
-<div style="margin-bottom:16px;position:relative">
-  <input type="text" id="product-search" placeholder="🔍  Produkt suchen …"
-    style="width:100%;padding:10px 16px;border:1px solid var(--border);border-radius:10px;font-size:0.95rem;background:#fff;color:var(--text)" />
+<!-- Filters -->
+<div class="filters-bar">
+  <input type="text" id="product-search" placeholder="🔍  Produkt suchen …" />
+  <div class="supplier-chips">
+    <button class="chip active" data-supplier="">Alle</button>
+    <% supplierNames.forEach(sup => { %>
+      <button class="chip" data-supplier="<%= sup %>"><%= sup %></button>
+    <% }) %>
+  </div>
 </div>
 
 <p style="font-size:0.82rem;color:var(--mid);margin-bottom:20px">
-  <%= totalProducts %> Produkte in <%= categories.length %> Kategorien
+  <span id="stats-text"><%= totalProducts %> Produkte bei <%= supplierNames.length %> Lieferanten</span>
 </p>
 
-<% categories.forEach(cat => { %>
-  <%
-    const products = byCategory[cat];
-    const groupKeys = Object.keys(products);
-  %>
-  <div class="category-section" data-category="<%= cat %>">
-    <div class="category-header" onclick="toggleCategory(this)">
-      <span class="category-title"><%= cat %></span>
-      <span class="category-count"><%= groupKeys.length %></span>
-      <span class="category-chevron">▾</span>
+<% supplierNames.forEach(sup => {
+  const categories = Object.keys(bySupplier[sup]);
+  let supProductCount = 0;
+  categories.forEach(c => { supProductCount += Object.keys(bySupplier[sup][c]).length; });
+%>
+  <div class="supplier-section" data-supplier="<%= sup %>">
+    <div class="supplier-header" onclick="toggleSection(this)">
+      <span class="supplier-title"><%= sup %></span>
+      <span class="supplier-count"><%= supProductCount %> Produkte</span>
+      <span class="section-chevron">▾</span>
     </div>
 
-    <div class="category-body">
-      <% groupKeys.forEach(key => { %>
-        <%
-          const group    = products[key];
-          const entries  = group.entries;
-          const prices   = entries.map(e => e.unit_price);
-          const minPrice = Math.min(...prices);
-          const latest   = entries[0];
-          const allSame  = prices.every(p => p === minPrice);
-          const searchTerms = [group.displayName, ...group.originalNames].join(' ').toLowerCase();
-        %>
-        <div class="product-card" data-name="<%= searchTerms %>">
-          <div class="product-top">
-            <div class="product-name">
-              <%= group.displayName %>
-              <% if (group.hasAlias) { %>
-                <span class="alias-badge">Oberbegriff</span>
+    <div class="supplier-body">
+      <% categories.forEach(cat => {
+        const products = bySupplier[sup][cat];
+        const groupKeys = Object.keys(products);
+      %>
+        <div class="subcategory-section" data-category="<%= cat %>">
+          <div class="subcategory-header"><%= cat %></div>
+
+          <% groupKeys.forEach(key => {
+            const group    = products[key];
+            const entries  = group.entries;
+            const prices   = entries.map(e => e.unit_price);
+            const minPrice = Math.min(...prices);
+            const latest   = entries[0];
+            const allSame  = prices.every(p => p === minPrice);
+            const searchTerms = [group.displayName, ...group.originalNames].join(' ').toLowerCase();
+          %>
+            <div class="product-card" data-name="<%= searchTerms %>" data-supplier="<%= sup %>">
+              <div class="product-top">
+                <div class="product-name">
+                  <%= group.displayName %>
+                  <% if (group.hasAlias) { %>
+                    <span class="alias-badge">Oberbegriff</span>
+                  <% } %>
+                </div>
+                <button type="button" class="alias-btn"
+                  onclick="openAliasModal(
+                    <%- JSON.stringify(group.displayName) %>,
+                    <%- JSON.stringify(group.originalNames) %>,
+                    <%= group.hasAlias %>
+                  )" title="Oberbegriff bearbeiten">✏️</button>
+                <div class="product-best-price">
+                  <%= minPrice.toFixed(2).replace('.',',') %> €/<%= latest.unit %>
+                </div>
+              </div>
+
+              <% if (group.originalNames.length > 1 || (group.originalNames.length === 1 && group.originalNames[0] !== group.displayName)) { %>
+                <div class="original-names">
+                  <% group.originalNames.forEach(n => { %>
+                    <span class="orig-tag"><%= n %></span>
+                  <% }) %>
+                </div>
+              <% } %>
+
+              <div class="product-meta">
+                <%= new Date(latest.date).toLocaleDateString('de-DE') %>
+                <% if (!allSame) { %><span style="color:var(--gold);margin-left:4px">▾ günstigster</span><% } %>
+              </div>
+
+              <% if (entries.length > 1) { %>
+              <details class="price-history">
+                <summary>Alle <%= entries.length %> Preise anzeigen</summary>
+                <table style="width:100%;margin-top:8px;font-size:0.82rem;border-collapse:collapse">
+                  <% entries.forEach(e => { %>
+                    <tr style="border-bottom:1px solid var(--border);<%= e.unit_price === minPrice ? 'background:rgba(39,174,96,0.06)' : '' %>">
+                      <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem"><%= e.product_name %></td>
+                      <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
+                      <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
+                        <%= e.unit_price.toFixed(2).replace('.',',') %> €/<%= e.unit %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </table>
+              </details>
               <% } %>
             </div>
-            <button type="button" class="alias-btn"
-              onclick="openAliasModal(
-                <%- JSON.stringify(group.displayName) %>,
-                <%- JSON.stringify(group.originalNames) %>,
-                <%= group.hasAlias %>
-              )" title="Oberbegriff bearbeiten">✏️</button>
-            <div class="product-best-price">
-              <%= minPrice.toFixed(2).replace('.',',') %> €/<%= latest.unit %>
-            </div>
-          </div>
-
-          <% if (group.originalNames.length > 1 || (group.originalNames.length === 1 && group.originalNames[0] !== group.displayName)) { %>
-            <div class="original-names">
-              <% group.originalNames.forEach(n => { %>
-                <span class="orig-tag"><%= n %></span>
-              <% }) %>
-            </div>
-          <% } %>
-
-          <div class="product-supplier">
-            <%= latest.supplier_name %> &nbsp;·&nbsp; <%= new Date(latest.date).toLocaleDateString('de-DE') %>
-            <% if (!allSame) { %><span style="color:var(--gold);margin-left:4px">▾ günstigster</span><% } %>
-          </div>
-
-          <% if (entries.length > 1) { %>
-          <details class="price-history">
-            <summary>Alle <%= entries.length %> Preise anzeigen</summary>
-            <table style="width:100%;margin-top:8px;font-size:0.82rem;border-collapse:collapse">
-              <% entries.forEach(e => { %>
-                <tr style="border-bottom:1px solid var(--border);<%= e.unit_price === minPrice ? 'background:rgba(39,174,96,0.06)' : '' %>">
-                  <td style="padding:5px 0"><%= e.supplier_name %></td>
-                  <td style="padding:5px 4px;color:var(--mid);font-size:0.75rem"><%= e.product_name %></td>
-                  <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
-                  <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
-                    <%= e.unit_price.toFixed(2).replace('.',',') %> €/<%= e.unit %>
-                  </td>
-                </tr>
-              <% }) %>
-            </table>
-          </details>
-          <% } %>
+          <% }) %>
         </div>
       <% }) %>
     </div>
@@ -122,28 +138,79 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 </div>
 
 <style>
-.category-section { margin-bottom: 12px; }
+/* ── Filters ── */
+.filters-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.filters-bar input[type="text"] {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #fff;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.supplier-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--mid);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.chip:hover { border-color: var(--gold); color: var(--gold); }
+.chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
 
-.category-header {
+/* ── Supplier sections ── */
+.supplier-section { margin-bottom: 14px; }
+
+.supplier-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 11px 16px;
   background: var(--dark);
   color: #fff;
   border-radius: 10px;
   cursor: pointer;
   user-select: none;
 }
-.category-header.collapsed { border-radius: 10px; }
-.category-title  { flex: 1; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.03em; }
-.category-count  { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 20px; font-size: 0.78rem; }
-.category-chevron { font-size: 0.9rem; transition: transform 0.2s; }
-.category-header.collapsed .category-chevron { transform: rotate(-90deg); }
+.supplier-header.collapsed { border-radius: 10px; }
+.supplier-title   { flex: 1; font-weight: 700; font-size: 0.95rem; }
+.supplier-count   { background: rgba(255,255,255,0.15); padding: 2px 9px; border-radius: 20px; font-size: 0.78rem; white-space: nowrap; }
+.section-chevron  { font-size: 0.9rem; transition: transform 0.2s; }
+.supplier-header.collapsed .section-chevron { transform: rotate(-90deg); }
 
-.category-body { padding: 8px 4px 0; display: block; }
-.category-body.hidden { display: none; }
+.supplier-body { padding: 10px 4px 2px; display: block; }
+.supplier-body.hidden { display: none; }
 
+/* ── Sub-category ── */
+.subcategory-section { margin-bottom: 10px; }
+.subcategory-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+/* ── Product cards ── */
 .product-card {
   background: #fff;
   border: 1px solid var(--border);
@@ -160,7 +227,7 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 }
 .product-name       { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .product-best-price { font-weight: 700; font-size: 1rem; color: var(--gold); white-space: nowrap; }
-.product-supplier   { font-size: 0.78rem; color: var(--mid); }
+.product-meta       { font-size: 0.78rem; color: var(--mid); }
 
 .alias-badge {
   font-size: 0.65rem;
@@ -202,12 +269,12 @@ const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c])
 }
 .price-history summary::-webkit-details-marker { display: none; }
 .price-history summary::before { content: '▸ '; }
-details[open] .price-history summary::before,
-.price-history[open] summary::before { content: '▾ '; }
+details[open].price-history summary::before { content: '▾ '; }
 
 .product-card.hidden-search { display: none; }
+.supplier-section.hidden-supplier { display: none; }
 
-/* Modal */
+/* ── Modal ── */
 #alias-modal {
   display: none;
   position: fixed;
@@ -231,7 +298,86 @@ details[open] .price-history summary::before,
 
 <script>
 let _aliasNames = [];
+let _activeSupplier = '';
 
+// ── Supplier chip filter ──
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', function () {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    _activeSupplier = this.dataset.supplier;
+    applyFilters();
+  });
+});
+
+// ── Search ──
+document.getElementById('product-search').addEventListener('input', applyFilters);
+
+function applyFilters() {
+  const q = document.getElementById('product-search').value.trim().toLowerCase();
+
+  document.querySelectorAll('.supplier-section').forEach(section => {
+    const sup = section.dataset.supplier;
+
+    // Supplier filter
+    const supplierMatch = !_activeSupplier || sup === _activeSupplier;
+    if (!supplierMatch) {
+      section.classList.add('hidden-supplier');
+      return;
+    }
+    section.classList.remove('hidden-supplier');
+
+    // Product search within visible supplier
+    let anyVisible = false;
+    section.querySelectorAll('.product-card').forEach(card => {
+      const name = card.dataset.name || '';
+      const match = !q || name.includes(q);
+      card.classList.toggle('hidden-search', !match);
+      if (match) anyVisible = true;
+    });
+
+    // Show/collapse sub-categories
+    section.querySelectorAll('.subcategory-section').forEach(sub => {
+      const hasVisible = sub.querySelectorAll('.product-card:not(.hidden-search)').length > 0;
+      sub.style.display = hasVisible ? '' : 'none';
+    });
+
+    // Expand supplier body when searching
+    if (q) {
+      section.querySelector('.supplier-body').classList.remove('hidden');
+      section.querySelector('.supplier-header').classList.remove('collapsed');
+    }
+
+    // Hide whole supplier if nothing matches
+    section.classList.toggle('hidden-supplier', !anyVisible);
+  });
+
+  updateStats();
+}
+
+function updateStats() {
+  const visible = document.querySelectorAll('.product-card:not(.hidden-search):not(.supplier-section.hidden-supplier .product-card)');
+  // Count visible products across visible suppliers
+  let count = 0;
+  let supplierSet = new Set();
+  document.querySelectorAll('.supplier-section:not(.hidden-supplier)').forEach(sec => {
+    const visCards = sec.querySelectorAll('.product-card:not(.hidden-search)').length;
+    if (visCards > 0) {
+      count += visCards;
+      supplierSet.add(sec.dataset.supplier);
+    }
+  });
+  const statsEl = document.getElementById('stats-text');
+  if (statsEl) statsEl.textContent = `${count} Produkte bei ${supplierSet.size} Lieferanten`;
+}
+
+// ── Toggle supplier section ──
+function toggleSection(header) {
+  header.classList.toggle('collapsed');
+  header.nextElementSibling.classList.toggle('hidden');
+}
+
+// ── Alias Modal ──
 function openAliasModal(displayName, originalNames, hasAlias) {
   _aliasNames = originalNames;
   document.getElementById('alias-input').value = hasAlias ? displayName : '';
@@ -271,25 +417,4 @@ async function postAlias(alias) {
     else { alert('Fehler beim Speichern.'); }
   } catch { alert('Netzwerkfehler.'); }
 }
-
-function toggleCategory(header) {
-  header.classList.toggle('collapsed');
-  header.nextElementSibling.classList.toggle('hidden');
-}
-
-document.getElementById('product-search').addEventListener('input', function () {
-  const q = this.value.trim().toLowerCase();
-  document.querySelectorAll('.product-card').forEach(card => {
-    const name = card.dataset.name || '';
-    card.classList.toggle('hidden-search', q.length > 0 && !name.includes(q));
-  });
-  document.querySelectorAll('.category-section').forEach(section => {
-    const visible = section.querySelectorAll('.product-card:not(.hidden-search)').length > 0;
-    section.style.display = visible ? '' : 'none';
-    if (q.length > 0) {
-      section.querySelector('.category-body').classList.remove('hidden');
-      section.querySelector('.category-header').classList.remove('collapsed');
-    }
-  });
-});
 </script>

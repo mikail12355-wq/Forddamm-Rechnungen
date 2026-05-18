@@ -50,7 +50,7 @@ router.get('/uploads/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Product list grouped by category (with canonical name support)
+// Product list grouped by supplier → category (with canonical name support)
 router.get('/produkte', async (req, res) => {
   const rows = await db.execute(`
     SELECT pit.product_name, pit.unit, pit.unit_price, pit.line_total, pit.quantity,
@@ -60,23 +60,26 @@ router.get('/produkte', async (req, res) => {
     JOIN purchase_invoices pi ON pit.purchase_invoice_id = pi.id
     JOIN suppliers s ON pi.supplier_id = s.id
     LEFT JOIN product_aliases pa ON pit.product_name = pa.product_name
-    ORDER BY pit.category ASC, display_name ASC, pi.date DESC
+    ORDER BY s.name ASC, pit.category ASC, display_name ASC, pi.date DESC
   `);
 
-  // Group: category → display_name → { displayName, originalNames[], hasAlias, entries[] }
-  const byCategory = {};
+  // Group: supplier_name → category → display_name → { displayName, originalNames[], hasAlias, entries[] }
+  const bySupplier = {};
   rows.rows.forEach(row => {
+    const sup = row.supplier_name || 'Unbekannt';
     const cat = row.category || 'Sonstiges';
     const key = row.display_name;
-    if (!byCategory[cat]) byCategory[cat] = {};
-    if (!byCategory[cat][key]) byCategory[cat][key] = { displayName: key, originalNames: [], hasAlias: false, entries: [] };
-    byCategory[cat][key].entries.push(row);
-    if (!byCategory[cat][key].originalNames.includes(row.product_name.trim()))
-      byCategory[cat][key].originalNames.push(row.product_name.trim());
-    if (row.display_name !== row.product_name) byCategory[cat][key].hasAlias = true;
+    if (!bySupplier[sup]) bySupplier[sup] = {};
+    if (!bySupplier[sup][cat]) bySupplier[sup][cat] = {};
+    if (!bySupplier[sup][cat][key]) bySupplier[sup][cat][key] = { displayName: key, originalNames: [], hasAlias: false, entries: [] };
+    bySupplier[sup][cat][key].entries.push(row);
+    if (!bySupplier[sup][cat][key].originalNames.includes(row.product_name.trim()))
+      bySupplier[sup][cat][key].originalNames.push(row.product_name.trim());
+    if (row.display_name !== row.product_name) bySupplier[sup][cat][key].hasAlias = true;
   });
 
-  res.render('einkauf/produkte', { title: 'Einkauf – Produkte', byCategory });
+  const supplierNames = Object.keys(bySupplier);
+  res.render('einkauf/produkte', { title: 'Einkauf – Produkte', bySupplier, supplierNames });
 });
 
 // Set / remove canonical alias for one or more product names
