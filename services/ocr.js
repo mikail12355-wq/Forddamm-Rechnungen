@@ -76,7 +76,7 @@ async function extractInvoiceData(filePath, mimeType) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
-    generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
+    generationConfig: { maxOutputTokens: 65536, temperature: 0.1 }
   });
 
   let parts;
@@ -106,9 +106,13 @@ async function extractInvoiceData(filePath, mimeType) {
     ];
   }
 
-  console.log('[OCR] Sende Anfrage an Gemini...');
-  const result = await model.generateContent(parts);
-  const text   = result.response.text().trim();
+  console.log('[OCR] Sende Anfrage an Gemini (streaming)...');
+  const streamResult = await model.generateContentStream(parts);
+  let text = '';
+  for await (const chunk of streamResult.stream) {
+    text += chunk.text();
+  }
+  text = text.trim();
   console.log(`[OCR] Antwort erhalten: ${text.length} Zeichen`);
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
