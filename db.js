@@ -106,6 +106,18 @@ async function initDB() {
   await db.execute("ALTER TABLE invoices ADD COLUMN paid INTEGER DEFAULT 0").catch(() => {});
   await db.execute("ALTER TABLE invoices ADD COLUMN paid_at TEXT DEFAULT ''").catch(() => {});
 
+  // Indexes for JOIN and ORDER BY performance
+  await db.executeMultiple(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_items_product_name ON purchase_items(product_name);
+    CREATE INDEX IF NOT EXISTS idx_purchase_items_category     ON purchase_items(category);
+    CREATE INDEX IF NOT EXISTS idx_purchase_invoices_supplier  ON purchase_invoices(supplier_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_invoices_date      ON purchase_invoices(date DESC);
+    CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id    ON invoice_items(invoice_id);
+    CREATE INDEX IF NOT EXISTS idx_invoices_date               ON invoices(date DESC);
+    CREATE INDEX IF NOT EXISTS idx_invoices_number             ON invoices(invoice_number);
+  `);
+
   const adminRes = await db.execute('SELECT id FROM users WHERE username = ?', ['admin']);
   if (!adminRes.rows[0]) {
     const hash = bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'Forddamm2024!', 10);
