@@ -97,16 +97,23 @@ function generatePDF(invoice, items, stream) {
                  [invoice.billing_zip, invoice.billing_city].filter(Boolean).join(' ')].filter(Boolean);
   const deliv = [invoice.customer_name, invoice.delivery_contact, invoice.delivery_street,
                  [invoice.delivery_zip, invoice.delivery_city].filter(Boolean).join(' ')].filter(Boolean);
-  const addrLines = Math.max(bill.length, deliv.length);
 
-  for (let i = 0; i < addrLines; i++) {
-    const bold = i === 0;
-    if (bill[i])  doc.fillColor(bold ? C.dark : C.mid).font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
-                     .text(bill[i],  c1, y + i * 13, { width: cW * 0.42, lineBreak: false });
-    if (deliv[i]) doc.fillColor(bold ? C.dark : C.mid).font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
-                     .text(deliv[i], c2, y + i * 13, { width: cW * 0.44, lineBreak: false });
-  }
-  y += addrLines * 13 + 20;
+  const renderAddrCol = (lines, x, width) => {
+    let cy = y;
+    lines.forEach((line, i) => {
+      const bold = i === 0;
+      doc.fillColor(bold ? C.dark : C.mid)
+         .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+         .fontSize(9)
+         .text(line, x, cy, { width });
+      cy = doc.y + 2;
+    });
+    return cy;
+  };
+
+  const billEnd  = renderAddrCol(bill,  c1, cW * 0.42);
+  const delivEnd = renderAddrCol(deliv, c2, cW * 0.44);
+  y = Math.max(billEnd, delivEnd) + 20;
 
   // ════ META ═══════════════════════════════════════════════════════════════
   const meta = [];
