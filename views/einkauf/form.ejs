@@ -1,0 +1,154 @@
+<div class="page-header">
+  <h2>Eingangsrechnung erfassen</h2>
+  <div style="display:flex;gap:10px">
+    <% if (!scanData) { %>
+      <a href="/einkauf/scan" class="btn-secondary">📷 Stattdessen scannen</a>
+    <% } %>
+    <a href="/einkauf" class="btn-secondary">← Zurück</a>
+  </div>
+</div>
+
+<% if (scanData) { %>
+<div class="flash flash-success" style="margin-bottom:16px">
+  ✓ KI hat die Rechnung ausgelesen — bitte Daten prüfen und ggf. korrigieren.
+</div>
+<% } %>
+
+<form action="/einkauf/neu" method="POST" enctype="multipart/form-data" id="einkauf-form">
+
+  <div class="card">
+    <h3 class="card-title">Lieferant & Rechnungsdaten</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Lieferant <span class="required">*</span></label>
+        <input type="text" name="supplier_name" list="supplier-list"
+               value="<%= scanData && scanData.supplier_name ? scanData.supplier_name : '' %>"
+               placeholder="z.B. Großbäcker GmbH" required autocomplete="off" />
+        <datalist id="supplier-list">
+          <% suppliers.forEach(s => { %>
+            <option value="<%= s.name %>">
+          <% }) %>
+        </datalist>
+        <small style="color:var(--mid);font-size:0.78rem">Neuer Lieferant wird automatisch angelegt.</small>
+      </div>
+      <div class="form-group">
+        <label>Rechnungsnummer</label>
+        <input type="text" name="invoice_number"
+               value="<%= scanData && scanData.invoice_number ? scanData.invoice_number : '' %>"
+               placeholder="z.B. RE-2026-0042" />
+      </div>
+      <div class="form-group">
+        <label>Rechnungsdatum <span class="required">*</span></label>
+        <input type="date" name="date"
+               value="<%= scanData && scanData.date ? scanData.date : today %>" required />
+      </div>
+      <div class="form-group">
+        <label>PDF hochladen <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+        <input type="file" name="pdf" accept="application/pdf" />
+        <small style="color:var(--mid);font-size:0.78rem">Max. 15 MB</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Positionen</h3>
+    <div id="einkauf-items">
+      <div class="items-header" style="grid-template-columns: 2fr 1fr 1fr 1fr auto">
+        <span>Produkt / Artikel</span>
+        <span>Menge</span>
+        <span>Einheit</span>
+        <span>Einzelpreis (netto)</span>
+        <span></span>
+      </div>
+    </div>
+    <button type="button" id="add-einkauf-row" class="btn-ghost" style="margin-top:12px">+ Position hinzufügen</button>
+
+    <div class="totals-preview" style="margin-top:16px">
+      <div class="totals-row totals-final"><span>Summe netto</span><span id="einkauf-total">0,00 €</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Notizen (intern)</h3>
+    <textarea name="notes" rows="2" placeholder="Interne Notiz …"></textarea>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:40px">
+    <button type="submit" class="btn-primary btn-lg">Speichern</button>
+    <a href="/einkauf" class="btn-secondary btn-lg">Abbrechen</a>
+  </div>
+</form>
+
+<script>
+const UNITS     = ['kg', 'g', 'l', 'ml', 'Stück', 'Beutel', 'Karton', 'Palette', 'KG', 'ST'];
+const SCAN_DATA = <%- JSON.stringify(scanData || null) %>;
+
+function buildUnitOptions(selected) {
+  const all = selected && !UNITS.includes(selected) ? [...UNITS, selected] : UNITS;
+  return all.map(u => `<option value="${u}"${u === selected ? ' selected' : ''}>${u}</option>`).join('');
+}
+
+function updateEinkaufTotal() {
+  let sum = 0;
+  document.querySelectorAll('.einkauf-row').forEach(row => {
+    const qty   = parseFloat(row.querySelector('.ei-qty').value.replace(',', '.'))   || 0;
+    const price = parseFloat(row.querySelector('.ei-price').value.replace(',', '.')) || 0;
+    sum += qty * price;
+  });
+  document.getElementById('einkauf-total').textContent = sum.toFixed(2).replace('.', ',') + ' €';
+}
+
+function updateEinkaufTotal() {
+  let sum = 0;
+  document.querySelectorAll('.einkauf-row').forEach(row => {
+    const ltInput = row.querySelector('.ei-line-total');
+    const lt = ltInput ? parseFloat(ltInput.value.replace(',', '.')) : NaN;
+    if (!isNaN(lt)) {
+      sum += lt;
+    } else {
+      const qty   = parseFloat(row.querySelector('.ei-qty').value.replace(',', '.'))   || 0;
+      const price = parseFloat(row.querySelector('.ei-price').value.replace(',', '.')) || 0;
+      sum += qty * price;
+    }
+  });
+  document.getElementById('einkauf-total').textContent = sum.toFixed(2).replace('.', ',') + ' €';
+}
+
+function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal = null, category = 'Sonstiges') {
+  const row = document.createElement('div');
+  row.className = 'item-row einkauf-row';
+  row.style.gridTemplateColumns = '2fr 1fr 1fr 1fr auto';
+
+  const qtyDisplay   = qty   !== '' ? String(qty).replace('.', ',')   : '';
+  const priceDisplay = price !== '' ? parseFloat(price).toFixed(2).replace('.', ',') : '';
+  const ltValue      = lineTotal !== null && lineTotal !== undefined ? String(lineTotal) : '';
+  const catValue     = category || 'Sonstiges';
+
+  row.innerHTML = `
+    <input type="text"   name="item_name"       class="ei-name"       value="${escHtml(name)}"         placeholder="z.B. Weizenmehl Typ 405" required />
+    <input type="text"   name="item_qty"        class="ei-qty"        value="${escHtml(qtyDisplay)}"   placeholder="1"    required />
+    <select              name="item_unit"        class="ei-unit">${buildUnitOptions(unit)}</select>
+    <input type="text"   name="item_price"      class="ei-price"      value="${escHtml(priceDisplay)}" placeholder="0,00" required />
+    <input type="hidden" name="item_line_total" class="ei-line-total" value="${escHtml(ltValue)}" />
+    <input type="hidden" name="item_category"   class="ei-category"  value="${escHtml(category || 'Sonstiges')}" />
+    <button type="button" class="remove-row" title="Entfernen">×</button>
+  `;
+  row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateEinkaufTotal(); });
+  row.querySelector('.ei-qty').addEventListener('input',   () => { row.querySelector('.ei-line-total').value = ''; updateEinkaufTotal(); });
+  row.querySelector('.ei-price').addEventListener('input', () => { row.querySelector('.ei-line-total').value = ''; updateEinkaufTotal(); });
+  document.getElementById('einkauf-items').appendChild(row);
+  updateEinkaufTotal();
+}
+
+document.getElementById('add-einkauf-row').addEventListener('click', () => addEinkaufRow());
+
+if (SCAN_DATA && Array.isArray(SCAN_DATA.items) && SCAN_DATA.items.length > 0) {
+  SCAN_DATA.items.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category));
+} else {
+  addEinkaufRow();
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>

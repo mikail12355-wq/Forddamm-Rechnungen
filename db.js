@@ -68,8 +68,34 @@ async function initDB() {
       unit_price REAL NOT NULL,
       UNIQUE(customer_id, article_id)
     );
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS purchase_invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id INTEGER REFERENCES suppliers(id),
+      invoice_number TEXT DEFAULT '',
+      date TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      pdf_filename TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_invoice_id INTEGER NOT NULL REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+      product_name TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 1,
+      unit TEXT DEFAULT 'kg',
+      unit_price REAL NOT NULL
+    );
   `);
 
+  // Migration: line_total for purchase_items (exact printed amount from invoice)
+  await db.execute("ALTER TABLE purchase_items ADD COLUMN line_total REAL").catch(() => {});
+  // Migration: category for purchase_items
+  await db.execute("ALTER TABLE purchase_items ADD COLUMN category TEXT DEFAULT 'Sonstiges'").catch(() => {});
   // Migration: delivery_contact moved from customers to invoices
   await db.execute("ALTER TABLE invoices ADD COLUMN delivery_contact TEXT DEFAULT ''").catch(() => {});
   // Migration: payment tracking

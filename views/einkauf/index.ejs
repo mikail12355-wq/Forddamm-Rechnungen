@@ -1,0 +1,56 @@
+<div class="page-header">
+  <h2>Eingangsrechnungen</h2>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <a href="/einkauf/produkte" class="btn-secondary">🗂 Produkte</a>
+    <a href="/einkauf/preisvergleich" class="btn-secondary">📊 Preisvergleich</a>
+    <a href="/einkauf/scan" class="btn-secondary">📷 Rechnung scannen</a>
+    <a href="/einkauf/neu" class="btn-primary">+ Manuell erfassen</a>
+  </div>
+</div>
+
+<div class="card">
+  <% if (invoices.length === 0) { %>
+    <p class="empty-state">Noch keine Eingangsrechnungen. <a href="/einkauf/neu">Erste Rechnung erfassen</a></p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Datum</th>
+        <th>Lieferant</th>
+        <th>Rechnungs-Nr.</th>
+        <th>Positionen</th>
+        <th>Gesamtbetrag</th>
+        <th>PDF</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% invoices.forEach(inv => { %>
+      <tr>
+        <td><%= new Date(inv.date).toLocaleDateString('de-DE') %></td>
+        <td><strong><%= inv.supplier_name || '—' %></strong></td>
+        <td><%= inv.invoice_number || '—' %></td>
+        <td><span class="badge badge-gray"><%= inv.item_count || 0 %> Pos.</span></td>
+        <td><%= inv.total ? inv.total.toFixed(2).replace('.',',') + ' €' : '—' %></td>
+        <td>
+          <% if (inv.pdf_filename) { %>
+            <a href="/einkauf/uploads/<%= inv.pdf_filename %>" target="_blank" class="link" style="font-size:0.85rem">PDF ↗</a>
+          <% } else { %>
+            <span style="color:var(--mid);font-size:0.8rem">—</span>
+          <% } %>
+        </td>
+        <td>
+          <div class="action-links">
+            <a href="/einkauf/<%= inv.id %>">Ansehen</a>
+            <form action="/einkauf/<%= inv.id %>/loeschen" method="POST" style="display:inline"
+                  onsubmit="return confirm('Eingangsrechnung wirklich löschen?')">
+              <button type="submit" class="link-danger">Löschen</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</div>

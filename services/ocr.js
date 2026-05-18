@@ -1,0 +1,180 @@
+const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
+const pdfParse = require('pdf-parse');
+
+const CATEGORIES = [
+  'Backzutaten',
+  'Brötchen & Gebäck',
+  'Brot & Backwaren',
+  'Wurst & Fleisch',
+  'Käse & Milchprodukte',
+  'Tiefkühlware',
+  'Getränke',
+  'Saucen & Gewürze',
+  'Dienstleistungen',
+  'Sonstiges'
+];
+
+const EXTRACT_PROMPT = `Du analysierst eine Eingangsrechnung (Lieferantenrechnung) einer Bäckerei.
+
+Extrahiere folgende Daten und gib sie als JSON zurück:
+- supplier_name: Name des Lieferanten (Firmenname des Absenders)
+- invoice_number: Rechnungsnummer als Text (oder null)
+- date: Rechnungsdatum im Format YYYY-MM-DD (oder null)
+- items: Array ALLER Produktpositionen mit:
+  - product_name: Produkt-/Artikelname (vollständig)
+  - quantity: Bestellmenge als Zahl
+  - unit: Einheit direkt aus der Rechnung (z.B. Stk., KG, Blech, l)
+  - unit_price: Netto-Einzelpreis EXAKT wie gedruckt (Zahl ohne €)
+  - line_total: Zeilenbetrag EXAKT wie gedruckt (Zahl, NICHT selbst ausrechnen)
+  - category: eine aus: "Backzutaten", "Brötchen & Gebäck", "Brot & Backwaren",
+    "Wurst & Fleisch", "Käse & Milchprodukte", "Tiefkühlware", "Getränke",
+    "Saucen & Gewürze", "Dienstleistungen", "Sonstiges"
+
+KATEGORIEN:
+- Mehl, Zucker, Fette, Backpulver → "Backzutaten"
+- Brötchen, Croissants, Laugengebäck, Stangen → "Brötchen & Gebäck"
+- Brot, Schnecken, Kuchen, Torten, Pfannkuchen, Eclairs, Muffins, Plunder → "Brot & Backwaren"
+- Wurst, Salami, Jagdwurst, Frikadellen, Chicken → "Wurst & Fleisch"
+- Käse, Milch, Quark, Butter, Mozzarella → "Käse & Milchprodukte"
+- Alles mit TK oder Tiefkühl → "Tiefkühlware"
+- Saucen, Tomatencreme, Gewürze → "Saucen & Gewürze"
+- Agio, Servicegebühren → "Dienstleistungen"
+
+WICHTIG – Pfand weglassen:
+Positionen wie "Pfand Bäckerkorb", "Pfand Kuchenblech" NICHT ins items-Array aufnehmen.
+
+WICHTIG – Mengenspalte:
+Wenn zwei Zahlen in der Mengenspalte stehen (z.B. "3,00 Stk. | 100"), ist die ERSTE die Bestellmenge.
+
+Gib NUR das JSON zurück, keine Erklärungen.
+
+Format:
+{
+  "supplier_name": "...",
+  "invoice_number": "...",
+  "date": "YYYY-MM-DD",
+  "items": [
+    {"product_name": "...", "quantity": 1, "unit": "Stk.", "unit_price": 2.24, "line_total": 2.24, "category": "Brot & Backwaren"}
+  ]
+}`;
+
+async function extractTextFromPdf(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  const parsed = await pdfParse(buffer);
+  return parsed.text || '';
+}
+
+async function extractInvoiceData(filePath, mimeType) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY nicht konfiguriert.');
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  let messages;
+
+  if (mimeType === 'application/pdf') {
+    // Extract text from PDF — much more token-efficient than sending binary
+    const pdfText = await extractTextFromPdf(filePath);
+    console.log(`[OCR] PDF-Text extrahiert: ${pdfText.trim().length} Zeichen`);
+
+    if (pdfText.trim().length < 100) {
+      // Scanned PDF (no extractable text) — fall back to sending as document
+      console.log('[OCR] Gescanntes PDF erkannt → sende als Base64-Dokument');
+      const base64Data = fs.readFileSync(filePath).toString('base64');
+      messages = [{
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+          { type: 'text', text: EXTRACT_PROMPT }
+        ]
+      }];
+    } else {
+      // Text-based PDF — send extracted text directly
+      console.log('[OCR] Text-PDF erkannt → sende als Text');
+      messages = [{
+        role: 'user',
+        content: `${EXTRACT_PROMPT}\n\n--- RECHNUNGSTEXT ---\n${pdfText}`
+      }];
+    }
+  } else {
+    // Image — send as vision request
+    const base64Data = fs.readFileSync(filePath).toString('base64');
+    const allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const mediaType  = allowed.includes(mimeType) ? mimeType : 'image/jpeg';
+    messages = [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+        { type: 'text', text: EXTRACT_PROMPT }
+      ]
+    }];
+  }
+
+  console.log('[OCR] Sende Anfrage an Claude (streaming)...');
+  const stream   = client.messages.stream({ model: 'claude-sonnet-4-6', max_tokens: 32000, messages });
+  const response = await stream.finalMessage();
+  console.log(`[OCR] Antwort erhalten: ${response.content[0].text.length} Zeichen, stop_reason: ${response.stop_reason}`);
+
+  const text       = response.content[0].text.trim();
+  const jsonMatch  = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Keine strukturierten Daten erkannt');
+
+  let data;
+  try {
+    data = JSON.parse(jsonMatch[0]);
+  } catch {
+    // Truncated JSON — salvage all complete item objects
+    const raw        = jsonMatch[0];
+    const itemsMatch = raw.match(/"items"\s*:\s*(\[[\s\S]*)/);
+    if (!itemsMatch) throw new Error('JSON konnte nicht verarbeitet werden');
+
+    let partial       = itemsMatch[1];
+    const lastBrace   = partial.lastIndexOf('}');
+    if (lastBrace === -1) throw new Error('Keine vollständigen Positionen erkannt');
+    partial           = partial.substring(0, lastBrace + 1) + ']';
+
+    const headerMatch = raw.match(/^\s*\{([\s\S]*?)"items"/);
+    const header      = headerMatch
+      ? '{' + headerMatch[1] + '"items":'
+      : '{"supplier_name":null,"invoice_number":null,"date":null,"items":';
+    data = JSON.parse(header + partial + '}');
+  }
+
+  // Deduplicate: same product + same price within one invoice = one entry
+  if (Array.isArray(data.items)) {
+    const seen = new Set();
+    data.items = data.items.filter(item => {
+      const key = `${String(item.product_name || '').trim().toLowerCase()}__${item.unit_price}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  // Normalize
+  if (Array.isArray(data.items)) {
+    data.items = data.items.map(item => {
+      const qty       = parseFloat(item.quantity)   || 1;
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      const lineTotal = parseFloat(item.line_total);
+      const category  = CATEGORIES.includes(item.category) ? item.category : 'Sonstiges';
+      return {
+        product_name: String(item.product_name || '').trim(),
+        quantity:     qty,
+        unit:         String(item.unit || 'Stk.').trim(),
+        unit_price:   unitPrice,
+        line_total:   isNaN(lineTotal) ? null : lineTotal,
+        category
+      };
+    }).filter(item => item.product_name);
+  } else {
+    data.items = [];
+  }
+
+  console.log(`[OCR] Extrahierte Positionen nach Bereinigung: ${data.items ? data.items.length : 0}`);
+  return data;
+}
+
+module.exports = { extractInvoiceData, CATEGORIES };

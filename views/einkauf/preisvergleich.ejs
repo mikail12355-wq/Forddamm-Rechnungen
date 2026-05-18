@@ -1,0 +1,57 @@
+<div class="page-header">
+  <h2>Preisvergleich</h2>
+  <a href="/einkauf" class="btn-secondary">← Zurück</a>
+</div>
+
+<% const products = Object.keys(grouped); %>
+
+<% if (products.length === 0) { %>
+  <div class="card">
+    <p class="empty-state">Noch keine Positionen erfasst. <a href="/einkauf/neu">Erste Rechnung erfassen</a></p>
+  </div>
+<% } else { %>
+  <p style="color:var(--mid);font-size:0.85rem;margin-bottom:16px">
+    <%= products.length %> Produkt<%= products.length !== 1 ? 'e' : '' %> — günstigster Preis je Produkt ist hervorgehoben.
+  </p>
+
+  <% products.forEach(productName => { %>
+    <%
+      const entries = grouped[productName];
+      const minPrice = Math.min(...entries.map(e => e.unit_price));
+    %>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1rem;color:var(--dark)"><%= productName %></h3>
+        <span class="badge badge-gray"><%= entries.length %> Eintrag<%= entries.length !== 1 ? 'e' : '' %></span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Lieferant</th>
+            <th>Datum</th>
+            <th>Menge</th>
+            <th>Einheit</th>
+            <th>Einzelpreis</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% entries.forEach(e => { %>
+            <% const isCheapest = e.unit_price === minPrice; %>
+            <tr<%= isCheapest ? ' style="background:rgba(40,167,69,0.06)"' : '' %>>
+              <td><strong><%= e.supplier_name %></strong></td>
+              <td><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
+              <td><%= String(e.quantity).replace('.', ',') %></td>
+              <td><%= e.unit %></td>
+              <td style="font-weight:<%= isCheapest ? '700' : '400' %>;color:<%= isCheapest ? '#27ae60' : 'inherit' %>">
+                <%= e.unit_price.toFixed(2).replace('.',',') %> €
+                <% if (isCheapest) { %><span style="font-size:0.75rem;margin-left:4px">✓ günstigster</span><% } %>
+              </td>
+              <td><a href="/einkauf/<%= e.invoice_id %>" class="link" style="font-size:0.82rem">Rechnung ↗</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% }) %>
+<% } %>

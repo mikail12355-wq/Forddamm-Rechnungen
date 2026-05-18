@@ -1,0 +1,82 @@
+<div class="page-header">
+  <h2>Eingangsrechnung</h2>
+  <a href="/einkauf" class="btn-secondary">← Zurück</a>
+</div>
+
+<div class="card">
+  <div class="form-grid">
+    <div>
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Lieferant</div>
+      <div style="font-size:1.05rem;font-weight:700"><%= invoice.supplier_name || '—' %></div>
+    </div>
+    <div>
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Datum</div>
+      <div><%= new Date(invoice.date).toLocaleDateString('de-DE') %></div>
+    </div>
+    <div>
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Rechnungsnummer</div>
+      <div><%= invoice.invoice_number || '—' %></div>
+    </div>
+    <div>
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">PDF</div>
+      <div>
+        <% if (invoice.pdf_filename) { %>
+          <a href="/einkauf/uploads/<%= invoice.pdf_filename %>" target="_blank" class="btn-secondary" style="padding:4px 12px;font-size:0.82rem">PDF öffnen ↗</a>
+        <% } else { %>
+          <span style="color:var(--mid)">Kein PDF hochgeladen</span>
+        <% } %>
+      </div>
+    </div>
+    <% if (invoice.notes) { %>
+    <div style="grid-column:1/-1">
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Notizen</div>
+      <div><%= invoice.notes %></div>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Positionen</h3>
+  <% if (items.length === 0) { %>
+    <p class="empty-state">Keine Positionen erfasst.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Produkt</th>
+        <th>Menge</th>
+        <th>Einheit</th>
+        <th>Einzelpreis</th>
+        <th>Gesamt</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% let total = 0; %>
+      <% items.forEach(item => { %>
+        <% const lineTotal = (item.line_total != null) ? item.line_total : (item.quantity * item.unit_price); total += lineTotal; %>
+        <tr>
+          <td><strong><%= item.product_name %></strong></td>
+          <td><%= String(item.quantity).replace('.', ',') %></td>
+          <td><%= item.unit %></td>
+          <td><%= item.unit_price.toFixed(2).replace('.',',') %> €</td>
+          <td><%= lineTotal.toFixed(2).replace('.',',') %> €</td>
+        </tr>
+      <% }) %>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4" style="text-align:right;font-weight:700;padding-right:16px">Summe netto</td>
+        <td style="font-weight:700"><%= total.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+    </tfoot>
+  </table>
+  <% } %>
+</div>
+
+<div style="display:flex;gap:12px;margin-bottom:40px">
+  <form action="/einkauf/<%= invoice.id %>/loeschen" method="POST"
+        onsubmit="return confirm('Eingangsrechnung wirklich löschen?')">
+    <button type="submit" class="btn-secondary" style="color:#c0392b;border-color:#c0392b">Löschen</button>
+  </form>
+</div>

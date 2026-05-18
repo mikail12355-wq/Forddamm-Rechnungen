@@ -1,0 +1,163 @@
+<div class="page-header">
+  <h2>Meine Produkte</h2>
+  <a href="/einkauf" class="btn-secondary">← Zurück</a>
+</div>
+
+<%
+const categories = Object.keys(byCategory);
+const totalProducts = categories.reduce((n, c) => n + Object.keys(byCategory[c]).length, 0);
+%>
+
+<% if (totalProducts === 0) { %>
+  <div class="card">
+    <p class="empty-state">Noch keine Produkte. <a href="/einkauf/scan">Erste Rechnung scannen</a></p>
+  </div>
+<% } else { %>
+
+<!-- Search -->
+<div style="margin-bottom:16px;position:relative">
+  <input type="text" id="product-search" placeholder="🔍  Produkt suchen …"
+    style="width:100%;padding:10px 16px;border:1px solid var(--border);border-radius:10px;font-size:0.95rem;background:#fff;color:var(--text)" />
+</div>
+
+<p style="font-size:0.82rem;color:var(--mid);margin-bottom:20px">
+  <%= totalProducts %> Produkte in <%= categories.length %> Kategorien
+</p>
+
+<% categories.forEach(cat => { %>
+  <%
+    const products = byCategory[cat];
+    const productNames = Object.keys(products);
+  %>
+  <div class="category-section" data-category="<%= cat %>">
+    <div class="category-header" onclick="toggleCategory(this)">
+      <span class="category-title"><%= cat %></span>
+      <span class="category-count"><%= productNames.length %></span>
+      <span class="category-chevron">▾</span>
+    </div>
+
+    <div class="category-body">
+      <% productNames.forEach(prodName => { %>
+        <%
+          const entries   = products[prodName];
+          const prices    = entries.map(e => e.unit_price);
+          const minPrice  = Math.min(...prices);
+          const latest    = entries[0];
+          const allSame   = prices.every(p => p === minPrice);
+        %>
+        <div class="product-card" data-name="<%= prodName.toLowerCase() %>">
+          <div class="product-top">
+            <div class="product-name"><%= prodName %></div>
+            <div class="product-best-price">
+              <%= minPrice.toFixed(2).replace('.',',') %> €/<%= latest.unit %>
+            </div>
+          </div>
+          <div class="product-supplier">
+            <%= latest.supplier_name %> &nbsp;·&nbsp; <%= new Date(latest.date).toLocaleDateString('de-DE') %>
+            <% if (!allSame) { %><span style="color:var(--gold);margin-left:4px">▾ günstigster</span><% } %>
+          </div>
+
+          <% if (entries.length > 1) { %>
+          <details class="price-history">
+            <summary>Alle <%= entries.length %> Preise anzeigen</summary>
+            <table style="width:100%;margin-top:8px;font-size:0.82rem;border-collapse:collapse">
+              <% entries.forEach(e => { %>
+                <tr style="border-bottom:1px solid var(--border);<%= e.unit_price === minPrice ? 'background:rgba(39,174,96,0.06)' : '' %>">
+                  <td style="padding:5px 0"><%= e.supplier_name %></td>
+                  <td style="padding:5px 8px;color:var(--mid)"><%= new Date(e.date).toLocaleDateString('de-DE') %></td>
+                  <td style="padding:5px 0;text-align:right;font-weight:<%= e.unit_price === minPrice ? '700' : '400' %>;color:<%= e.unit_price === minPrice ? '#27ae60' : 'inherit' %>">
+                    <%= e.unit_price.toFixed(2).replace('.',',') %> €/<%= e.unit %>
+                  </td>
+                </tr>
+              <% }) %>
+            </table>
+          </details>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+<% }) %>
+
+<% } %>
+
+<style>
+.category-section { margin-bottom: 12px; }
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--dark);
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.category-header.collapsed { border-radius: 10px; }
+.category-title  { flex: 1; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.03em; }
+.category-count  { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 20px; font-size: 0.78rem; }
+.category-chevron { font-size: 0.9rem; transition: transform 0.2s; }
+.category-header.collapsed .category-chevron { transform: rotate(-90deg); }
+
+.category-body { padding: 8px 4px 0; display: block; }
+.category-body.hidden { display: none; }
+
+.product-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.product-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.product-name       { font-weight: 700; font-size: 0.95rem; color: var(--dark); flex: 1; }
+.product-best-price { font-weight: 700; font-size: 1rem; color: var(--gold); white-space: nowrap; }
+.product-supplier   { font-size: 0.78rem; color: var(--mid); }
+
+.price-history { margin-top: 8px; }
+.price-history summary {
+  font-size: 0.8rem;
+  color: var(--mid);
+  cursor: pointer;
+  list-style: none;
+}
+.price-history summary::-webkit-details-marker { display: none; }
+.price-history summary::before { content: '▸ '; }
+details[open] .price-history summary::before,
+.price-history[open] summary::before { content: '▾ '; }
+
+/* Search highlight */
+.product-card.hidden-search { display: none; }
+</style>
+
+<script>
+function toggleCategory(header) {
+  header.classList.toggle('collapsed');
+  header.nextElementSibling.classList.toggle('hidden');
+}
+
+document.getElementById('product-search').addEventListener('input', function () {
+  const q = this.value.trim().toLowerCase();
+  document.querySelectorAll('.product-card').forEach(card => {
+    const name = card.dataset.name || '';
+    card.classList.toggle('hidden-search', q.length > 0 && !name.includes(q));
+  });
+  // Show/hide category sections based on visible products
+  document.querySelectorAll('.category-section').forEach(section => {
+    const visible = section.querySelectorAll('.product-card:not(.hidden-search)').length > 0;
+    section.style.display = visible ? '' : 'none';
+    if (q.length > 0) {
+      section.querySelector('.category-body').classList.remove('hidden');
+      section.querySelector('.category-header').classList.remove('collapsed');
+    }
+  });
+});
+</script>
