@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const multer = require('multer');
+const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 const path = require('path');
 const fs = require('fs');
 
