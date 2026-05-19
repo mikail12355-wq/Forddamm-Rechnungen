@@ -9,7 +9,7 @@ const MONTHS = ['Januar','Februar','März','April','Mai','Juni',
 
 // ── Hauptseite ───────────────────────────────────────────────
 router.get('/', w(async (req, res) => {
-  const now  = new Date();
+  const now   = new Date();
   const monat = req.query.monat ||
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -33,25 +33,30 @@ router.get('/', w(async (req, res) => {
   ]);
 
   const employees = maRes.rows;
-  const kosten    = {};
-  kostenRes.rows.forEach(r => { kosten[r.ma_id] = r.betrag; });
 
-  // Einnahmen automatisch aus bestehenden Tabellen
+  // monatliche Überschreibung; fehlt sie, gilt das Standard-Gehalt
+  const overrides = {};
+  kostenRes.rows.forEach(r => { overrides[r.ma_id] = r.betrag; });
+
+  const kosten = {};
+  employees.forEach(e => {
+    kosten[e.id] = overrides[e.id] !== undefined ? overrides[e.id] : (e.gehalt || 0);
+  });
+
   const liefNetto   = Number(invRes.rows[0]?.netto)  || 0;
   const liefBrutto  = liefNetto * 1.07;
   const ladenBrutto = Number(cashRes.rows[0]?.brutto) || 0;
   const gesamtEin   = liefBrutto + ladenBrutto;
 
-  // Ausgaben nach Typ
   const summen = { vz: 0, tz: 0, mj: 0 };
-  employees.forEach(e => { summen[e.type] = (summen[e.type] || 0) + (kosten[e.id] || 0); });
+  employees.forEach(e => { summen[e.type] = (summen[e.type] || 0) + kosten[e.id]; });
   const totalKosten = summen.vz + summen.tz + summen.mj;
   const gewinn      = gesamtEin - totalKosten;
 
   res.render('mitarbeiter/index', {
     title: 'Mitarbeiter',
     monat, monatLabel,
-    employees, kosten,
+    employees, kosten, overrides,
     liefBrutto, ladenBrutto, gesamtEin,
     summen, totalKosten, gewinn,
   });
@@ -59,11 +64,22 @@ router.get('/', w(async (req, res) => {
 
 // ── API: Mitarbeiter hinzufügen ──────────────────────────────
 router.post('/ma', w(async (req, res) => {
-  const { id, label, type } = req.body;
+  const { id, label, type, gehalt } = req.body;
   if (!id || !label || !type) return res.status(400).json({ error: 'Fehlende Felder' });
   await db.execute(
-    'INSERT INTO mitarbeiter (id, label, type) VALUES (?, ?, ?)',
-    [id, label, type]
+    'INSERT INTO mitarbeiter (id, label, type, gehalt) VALUES (?, ?, ?, ?)',
+    [id, label, type, parseFloat(gehalt) || 0]
+  );
+  res.json({ ok: true });
+}));
+
+// ── API: Mitarbeiter bearbeiten ──────────────────────────────
+router.put('/ma/:id', w(async (req, res) => {
+  const { label, type, gehalt } = req.body;
+  if (!label || !type) return res.status(400).json({ error: 'Fehlende Felder' });
+  await db.execute(
+    'UPDATE mitarbeiter SET label = ?, type = ?, gehalt = ? WHERE id = ?',
+    [label, type, parseFloat(gehalt) || 0, req.params.id]
   );
   res.json({ ok: true });
 }));
@@ -75,11 +91,20 @@ router.delete('/ma/:id', w(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ── API: Kosten speichern ────────────────────────────────────
+// ── API: Monatskosten speichern (Überschreibung) ─────────────
 router.put('/kosten/:monat/:maId', w(async (req, res) => {
   const { monat, maId } = req.params;
   const betrag = req.body.betrag;
-  if (betrag === null || betrag === undefined || betrag === '') {
+
+  // Hole das Standard-Gehalt des Mitarbeiters
+  const maRes = await db.execute('SELECT gehalt FROM mitarbeiter WHERE id = ?', [maId]);
+  const gehalt = Number(maRes.rows[0]?.gehalt) || 0;
+  const val    = betrag === '' || betrag === null || betrag === undefined
+    ? null
+    : parseFloat(betrag) || 0;
+
+  // Nur speichern wenn der Wert vom Standard-Gehalt abweicht
+  if (val === null || val === gehalt) {
     await db.execute(
       'DELETE FROM mitarbeiter_kosten WHERE monat = ? AND ma_id = ?',
       [monat, maId]
@@ -87,7 +112,7 @@ router.put('/kosten/:monat/:maId', w(async (req, res) => {
   } else {
     await db.execute(
       'INSERT OR REPLACE INTO mitarbeiter_kosten (monat, ma_id, betrag) VALUES (?, ?, ?)',
-      [monat, maId, parseFloat(betrag) || 0]
+      [monat, maId, val]
     );
   }
   res.json({ ok: true });

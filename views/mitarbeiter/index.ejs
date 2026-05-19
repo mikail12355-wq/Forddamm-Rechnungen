@@ -21,11 +21,13 @@
         <% } else { %>
           <% employees.forEach(e => { %>
             <div class="ma-row" id="ma-<%= e.id %>">
-              <span class="ma-label"><%= e.label %></span>
-              <span class="ma-badge type-<%= e.type %>">
-                <%= {vz:'VZ', tz:'TZ', mj:'MJ'}[e.type] %>
-              </span>
-              <button class="ma-del" onclick="deleteEmployee('<%= e.id %>', '<%= e.label %>')" title="Löschen">✕</button>
+              <div class="ma-row-info">
+                <span class="ma-label"><%= e.label %></span>
+                <span class="ma-gehalt-hint"><%= (e.gehalt||0).toFixed(2).replace('.',',') %> €/Monat</span>
+              </div>
+              <span class="ma-badge type-<%= e.type %>"><%= {vz:'VZ', tz:'TZ', mj:'MJ'}[e.type] %></span>
+              <button class="ma-edit" onclick="openEdit('<%= e.id %>','<%= e.label %>','<%= e.type %>',<%= e.gehalt||0 %>)" title="Bearbeiten">✏️</button>
+              <button class="ma-del"  onclick="deleteEmployee('<%= e.id %>', '<%= e.label %>')" title="Löschen">✕</button>
             </div>
           <% }) %>
         <% } %>
@@ -33,13 +35,19 @@
 
       <!-- Hinzufügen -->
       <div class="ma-add-wrap">
-        <input id="new-label" type="text" placeholder="Kürzel (z.B. MA-001)" maxlength="25"
-          onkeydown="if(event.key==='Enter')addEmployee()">
+        <input id="new-label"  type="text"   placeholder="Kürzel (z.B. MA-001)" maxlength="25" onkeydown="if(event.key==='Enter')addEmployee()">
         <select id="new-type">
           <option value="vz">Vollzeit</option>
           <option value="tz">Teilzeit</option>
           <option value="mj">Minijob (bis 603 €)</option>
         </select>
+        <div class="ma-gehalt-row">
+          <label>Standard-Gehalt / Monat</label>
+          <div class="ma-gehalt-inp-wrap">
+            <input id="new-gehalt" type="number" min="0" step="0.01" placeholder="0,00">
+            <span>€</span>
+          </div>
+        </div>
         <button class="btn-primary ma-add-btn" onclick="addEmployee()">+ Hinzufügen</button>
       </div>
 
@@ -54,42 +62,48 @@
 
     <!-- Kostentabelle -->
     <div class="ma-card" style="margin-bottom:16px">
-      <div class="ma-card-title">Ausgaben — <%= monatLabel %></div>
+      <div class="ma-card-title">
+        Ausgaben — <%= monatLabel %>
+        <span class="ma-card-sub">Abweichung vom Standard-Gehalt hier eintragen</span>
+      </div>
       <table class="ma-table">
         <thead>
           <tr>
             <th>Kürzel</th>
-            <th>Beschäftigung</th>
-            <th style="text-align:right">Betrag diesen Monat</th>
+            <th>Typ</th>
+            <th>Standard/Monat</th>
+            <th style="text-align:right">Diesen Monat</th>
           </tr>
         </thead>
         <tbody>
           <% if (employees.length === 0) { %>
-            <tr>
-              <td colspan="3" style="color:var(--mid);font-style:italic;padding:18px 8px">
-                Füge links Mitarbeiter hinzu.
-              </td>
-            </tr>
+            <tr><td colspan="4" style="color:var(--mid);font-style:italic;padding:18px 8px">Füge links Mitarbeiter hinzu.</td></tr>
           <% } else { %>
-            <% employees.forEach(e => { %>
+            <% employees.forEach(e => {
+                 const isOverride = overrides[e.id] !== undefined;
+                 const displayVal = kosten[e.id];
+            %>
               <tr>
                 <td class="ma-tname"><%= e.label %></td>
-                <td>
-                  <span class="ma-badge type-<%= e.type %>">
-                    <%= {vz:'Vollzeit', tz:'Teilzeit', mj:'Minijob'}[e.type] %>
-                  </span>
-                </td>
-                <td style="text-align:right">
-                  <input class="ma-cost-inp" type="number" min="0" step="0.01" placeholder="0,00"
-                    value="<%= kosten[e.id] !== undefined ? kosten[e.id] : '' %>"
+                <td><span class="ma-badge type-<%= e.type %>"><%= {vz:'Vollzeit', tz:'Teilzeit', mj:'Minijob'}[e.type] %></span></td>
+                <td class="ma-std"><%= (e.gehalt||0).toFixed(2).replace('.',',') %> €</td>
+                <td style="text-align:right;white-space:nowrap">
+                  <input class="ma-cost-inp <%= isOverride ? 'is-override' : '' %>"
+                    type="number" min="0" step="0.01"
+                    placeholder="<%= (e.gehalt||0).toFixed(2).replace('.',',') %>"
+                    value="<%= isOverride ? displayVal : '' %>"
                     oninput="saveCost('<%= e.id %>', this.value)">
                   &nbsp;<span style="color:var(--mid)">€</span>
+                  <% if (isOverride) { %>
+                    <span class="override-badge" title="Abweichung vom Standard">!</span>
+                  <% } %>
                 </td>
               </tr>
             <% }) %>
           <% } %>
         </tbody>
       </table>
+      <p class="ma-table-hint">Leer lassen = Standard-Gehalt wird automatisch verwendet.</p>
     </div>
 
     <!-- Zusammenfassung -->
@@ -103,14 +117,14 @@
 
       <div class="ub-cards" style="margin-bottom:14px">
         <div class="ub-card">
-          <div class="ub-card-label">Rechnungen (brutto 7%)</div>
+          <div class="ub-card-label">Rechnungen (brutto)</div>
           <div class="ub-card-value"><%= liefBrutto.toFixed(2).replace('.',',') %> €</div>
-          <div class="ub-card-sub">automatisch aus Rechnungen</div>
+          <div class="ub-card-sub">aus Rechnungen</div>
         </div>
         <div class="ub-card">
           <div class="ub-card-label">Tageskasse</div>
           <div class="ub-card-value"><%= ladenBrutto.toFixed(2).replace('.',',') %> €</div>
-          <div class="ub-card-sub">automatisch aus Tageskasse</div>
+          <div class="ub-card-sub">aus Tageskasse</div>
         </div>
         <div class="ub-card ub-card-primary">
           <div class="ub-card-label">Gesamt-Einnahmen</div>
@@ -120,15 +134,15 @@
 
       <div class="ub-cards" style="margin-bottom:14px">
         <div class="ub-card ub-card-warn">
-          <div class="ub-card-label">Vollzeit-Kosten</div>
+          <div class="ub-card-label">Vollzeit (<%= employees.filter(e=>e.type==='vz').length %> MA)</div>
           <div class="ub-card-value" id="sum-vz"><%= summen.vz.toFixed(2).replace('.',',') %> €</div>
         </div>
         <div class="ub-card ub-card-warn">
-          <div class="ub-card-label">Teilzeit-Kosten</div>
+          <div class="ub-card-label">Teilzeit (<%= employees.filter(e=>e.type==='tz').length %> MA)</div>
           <div class="ub-card-value" id="sum-tz"><%= summen.tz.toFixed(2).replace('.',',') %> €</div>
         </div>
         <div class="ub-card ub-card-warn">
-          <div class="ub-card-label">Minijob-Kosten</div>
+          <div class="ub-card-label">Minijob (<%= employees.filter(e=>e.type==='mj').length %> MA)</div>
           <div class="ub-card-value" id="sum-mj"><%= summen.mj.toFixed(2).replace('.',',') %> €</div>
         </div>
         <div class="ub-card" style="border-color:#e53935">
@@ -137,7 +151,7 @@
         </div>
       </div>
 
-      <div class="ma-gewinn-box" id="gewinn-box">
+      <div class="ma-gewinn-box">
         <span class="ma-gewinn-label">GEWINN — <%= monatLabel %></span>
         <span class="ma-gewinn-val <%= gewinn >= 0 ? 'pos' : 'neg' %>" id="gewinn-val">
           <%= gewinn.toFixed(2).replace('.',',') %> €
@@ -148,246 +162,254 @@
   </div>
 </div>
 
+<!-- ── BEARBEITEN-MODAL ───────────────────────────────────────── -->
+<div class="modal-backdrop" id="edit-modal" style="display:none" onclick="if(event.target===this)closeEdit()">
+  <div class="modal-box">
+    <h3>Mitarbeiter bearbeiten</h3>
+    <input type="hidden" id="edit-id">
+    <div class="modal-field">
+      <label>Kürzel</label>
+      <input id="edit-label" type="text" maxlength="25">
+    </div>
+    <div class="modal-field">
+      <label>Beschäftigungsart</label>
+      <select id="edit-type">
+        <option value="vz">Vollzeit</option>
+        <option value="tz">Teilzeit</option>
+        <option value="mj">Minijob (bis 603 €)</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Standard-Gehalt / Monat (€)</label>
+      <input id="edit-gehalt" type="number" min="0" step="0.01" placeholder="0,00">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeEdit()">Abbrechen</button>
+      <button class="btn-primary" onclick="saveEdit()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <style>
 .ma-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 290px 1fr;
   gap: 20px;
   align-items: start;
 }
-@media (max-width: 800px) {
-  .ma-layout { grid-template-columns: 1fr; }
-}
+@media (max-width: 820px) { .ma-layout { grid-template-columns: 1fr; } }
 
-.ma-card {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px 20px;
-}
+.ma-card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
 .ma-card-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--mid);
-  margin-bottom: 14px;
+  font-size:0.8rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--mid); margin-bottom:14px;
+  display:flex; align-items:baseline; gap:8px;
 }
+.ma-card-sub { font-size:0.72rem; font-weight:400; text-transform:none; letter-spacing:0; color:var(--mid); }
 
 .ma-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 8px;
-  border-radius: 7px;
-  margin-bottom: 5px;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  display:flex; align-items:center; gap:6px;
+  padding:7px 8px; border-radius:7px; margin-bottom:5px;
+  background:var(--bg); border:1px solid var(--border);
 }
-.ma-label { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--dark); }
-.ma-del {
-  background: none;
-  border: none;
-  color: #ccc;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0 2px;
-  line-height: 1;
-}
-.ma-del:hover { color: #e53935; }
-.ma-empty { font-size: 0.82rem; color: var(--mid); font-style: italic; margin-bottom: 12px; }
+.ma-row-info { flex:1; min-width:0; }
+.ma-label { font-size:.88rem; font-weight:600; color:var(--dark); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ma-gehalt-hint { font-size:.72rem; color:var(--mid); }
+.ma-edit { background:none; border:none; cursor:pointer; font-size:13px; padding:0 1px; opacity:.6; }
+.ma-edit:hover { opacity:1; }
+.ma-del { background:none; border:none; color:#ccc; cursor:pointer; font-size:14px; padding:0 2px; }
+.ma-del:hover { color:#e53935; }
+.ma-empty { font-size:.82rem; color:var(--mid); font-style:italic; margin-bottom:12px; }
 
-.ma-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-.type-vz { background: #e3f0ff; color: #1565c0; }
-.type-tz { background: #f3e8ff; color: #6a1b9a; }
-.type-mj { background: #fff3e0; color: #e65100; }
+.ma-badge { font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+.type-vz { background:#e3f0ff; color:#1565c0; }
+.type-tz { background:#f3e8ff; color:#6a1b9a; }
+.type-mj { background:#fff3e0; color:#e65100; }
 
-.ma-add-wrap {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+.ma-add-wrap { margin-top:14px; display:flex; flex-direction:column; gap:7px; }
+.ma-add-wrap input,.ma-add-wrap select {
+  width:100%; padding:7px 10px; border:1px solid var(--border);
+  border-radius:7px; font-size:.88rem; background:var(--bg); color:var(--dark);
 }
-.ma-add-wrap input,
-.ma-add-wrap select {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  font-size: 0.88rem;
-  background: var(--bg);
-  color: var(--dark);
-}
-.ma-add-btn { width: 100%; margin-top: 2px; }
+.ma-gehalt-row { display:flex; flex-direction:column; gap:3px; }
+.ma-gehalt-row label { font-size:.75rem; color:var(--mid); }
+.ma-gehalt-inp-wrap { display:flex; align-items:center; gap:6px; }
+.ma-gehalt-inp-wrap input { flex:1; }
+.ma-gehalt-inp-wrap span { font-size:.88rem; color:var(--mid); }
+.ma-add-btn { width:100%; margin-top:2px; }
 
 .dsgvo-hint {
-  margin-top: 14px;
-  padding: 8px 12px;
-  background: #f0f7ff;
-  border: 1px solid #b3d4f5;
-  border-radius: 7px;
-  font-size: 0.75rem;
-  color: #1565c0;
-  line-height: 1.5;
+  margin-top:14px; padding:8px 12px;
+  background:#f0f7ff; border:1px solid #b3d4f5;
+  border-radius:7px; font-size:.75rem; color:#1565c0; line-height:1.5;
 }
 
-.ma-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.ma-table th {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--mid);
-  font-weight: 600;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-.ma-table td {
-  padding: 9px 8px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.ma-table tr:last-child td { border-bottom: none; }
-.ma-tname { font-weight: 600; font-size: 0.9rem; color: var(--dark); }
+.ma-table { width:100%; border-collapse:collapse; }
+.ma-table th { font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--mid); font-weight:600; padding:5px 8px; border-bottom:1px solid var(--border); text-align:left; }
+.ma-table td { padding:9px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.ma-table tr:last-child td { border-bottom:none; }
+.ma-tname { font-weight:600; font-size:.9rem; color:var(--dark); }
+.ma-std { font-size:.82rem; color:var(--mid); }
 
 .ma-cost-inp {
-  width: 130px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: right;
-  background: #fff8f8;
-  color: #c62828;
+  width:120px; padding:6px 10px; border:1px solid var(--border);
+  border-radius:6px; font-size:.9rem; font-weight:600; text-align:right;
+  background:#fff8f8; color:#c62828;
 }
-.ma-cost-inp:focus { outline: none; border-color: #e53935; }
+.ma-cost-inp:focus { outline:none; border-color:#e53935; }
+.ma-cost-inp.is-override { background:#fff3e0; border-color:#f0a04b; color:#e65100; }
+
+.override-badge {
+  display:inline-block; background:#f0a04b; color:#fff;
+  font-size:.65rem; font-weight:700; border-radius:50%;
+  width:16px; height:16px; line-height:16px; text-align:center;
+  vertical-align:middle; margin-left:3px;
+}
+.ma-table-hint { font-size:.72rem; color:var(--mid); margin-top:8px; padding:0 8px; }
 
 .ma-gewinn-box {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--dark);
-  border-radius: 10px;
-  padding: 14px 20px;
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--dark); border-radius:10px; padding:14px 20px;
 }
-.ma-gewinn-label { font-weight: 700; font-size: 0.95rem; color: #fff; }
-.ma-gewinn-val { font-size: 1.7rem; font-weight: 900; }
-.ma-gewinn-val.pos { color: #69f0ae; }
-.ma-gewinn-val.neg { color: #ff5252; }
+.ma-gewinn-label { font-weight:700; font-size:.95rem; color:#fff; }
+.ma-gewinn-val { font-size:1.7rem; font-weight:900; }
+.ma-gewinn-val.pos { color:#69f0ae; }
+.ma-gewinn-val.neg { color:#ff5252; }
 
-/* Reuse ub-* classes from Überblick */
-.ub-section {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px 22px;
+/* Reuse ub-* */
+.ub-section { background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px 22px; }
+.ub-section-title { display:flex; align-items:center; gap:8px; font-weight:700; font-size:.88rem; letter-spacing:.03em; color:var(--dark); margin-bottom:16px; }
+.ub-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.ub-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 16px; }
+.ub-card-primary { background:#fff; border-color:var(--gold); }
+.ub-card-warn { background:#fffaf4; border-color:#f0a04b; }
+.ub-card-label { font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--mid); margin-bottom:5px; }
+.ub-card-value { font-size:1.2rem; font-weight:700; color:var(--dark); }
+.ub-card-sub { font-size:.75rem; color:var(--mid); margin-top:3px; }
+
+/* Modal */
+.modal-backdrop {
+  position:fixed; inset:0; background:rgba(0,0,0,.5);
+  z-index:200; display:flex; align-items:center; justify-content:center;
 }
-.ub-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 0.88rem;
-  letter-spacing: 0.03em;
-  color: var(--dark);
-  margin-bottom: 16px;
+.modal-box {
+  background:#fff; border-radius:14px; padding:26px 28px;
+  width:360px; box-shadow:0 20px 60px rgba(0,0,0,.2);
 }
-.ub-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
+.modal-box h3 { font-size:1rem; font-weight:700; color:var(--dark); margin-bottom:18px; }
+.modal-field { margin-bottom:13px; }
+.modal-field label { display:block; font-size:.78rem; color:var(--mid); margin-bottom:4px; font-weight:600; }
+.modal-field input,.modal-field select {
+  width:100%; padding:8px 11px; border:1px solid var(--border);
+  border-radius:7px; font-size:.9rem; color:var(--dark); background:#fafafa;
 }
-.ub-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
-.ub-card-primary { background: #fff; border-color: var(--gold); }
-.ub-card-warn { background: #fffaf4; border-color: #f0a04b; }
-.ub-card-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mid); margin-bottom: 5px; }
-.ub-card-value { font-size: 1.2rem; font-weight: 700; color: var(--dark); }
-.ub-card-sub { font-size: 0.75rem; color: var(--mid); margin-top: 3px; }
+.modal-field input:focus,.modal-field select:focus { outline:none; border-color:var(--gold); }
+.modal-btns { display:flex; gap:10px; margin-top:20px; }
+.modal-btns button { flex:1; padding:10px; border-radius:8px; font-size:.9rem; font-weight:600; cursor:pointer; border:none; }
+.btn-secondary { background:var(--bg); color:var(--mid); border:1px solid var(--border) !important; }
 </style>
 
 <script>
 const CURRENT_MONAT = '<%= monat %>';
+const EMPLOYEES     = <%- JSON.stringify(employees) %>;
 let saveTimer = null;
 
-// Mitarbeiter hinzufügen
+// ── Mitarbeiter hinzufügen ───────────────────────────────────
 async function addEmployee() {
-  const label = document.getElementById('new-label').value.trim();
+  const label  = document.getElementById('new-label').value.trim();
   if (!label) { alert('Bitte ein Kürzel eingeben.'); return; }
-  const type = document.getElementById('new-type').value;
-  const id = 'ma' + Date.now();
+  const type   = document.getElementById('new-type').value;
+  const gehalt = parseFloat(document.getElementById('new-gehalt').value) || 0;
+  const id     = 'ma' + Date.now();
+
   const r = await fetch('/mitarbeiter/ma', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, label, type })
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, label, type, gehalt }),
   });
   if (r.ok) location.reload();
   else alert('Fehler beim Hinzufügen.');
 }
 
-// Mitarbeiter löschen
+// ── Mitarbeiter löschen ──────────────────────────────────────
 async function deleteEmployee(id, label) {
   if (!confirm(`Mitarbeiter "${label}" und alle Kosten-Einträge löschen?`)) return;
-  const r = await fetch('/mitarbeiter/ma/' + id, { method: 'DELETE' });
+  const r = await fetch('/mitarbeiter/ma/' + id, { method:'DELETE' });
   if (r.ok) location.reload();
   else alert('Fehler beim Löschen.');
 }
 
-// Kosten speichern (auto-save mit Debounce)
+// ── Bearbeiten-Modal ─────────────────────────────────────────
+function openEdit(id, label, type, gehalt) {
+  document.getElementById('edit-id').value     = id;
+  document.getElementById('edit-label').value  = label;
+  document.getElementById('edit-type').value   = type;
+  document.getElementById('edit-gehalt').value = gehalt || '';
+  document.getElementById('edit-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('edit-label').focus(), 50);
+}
+function closeEdit() {
+  document.getElementById('edit-modal').style.display = 'none';
+}
+async function saveEdit() {
+  const id     = document.getElementById('edit-id').value;
+  const label  = document.getElementById('edit-label').value.trim();
+  const type   = document.getElementById('edit-type').value;
+  const gehalt = parseFloat(document.getElementById('edit-gehalt').value) || 0;
+  if (!label) { alert('Kürzel darf nicht leer sein.'); return; }
+
+  const r = await fetch('/mitarbeiter/ma/' + id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ label, type, gehalt }),
+  });
+  if (r.ok) location.reload();
+  else alert('Fehler beim Speichern.');
+}
+
+// ── Kosten speichern (debounced) ─────────────────────────────
 function saveCost(maId, value) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     await fetch(`/mitarbeiter/kosten/${CURRENT_MONAT}/${maId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ betrag: value === '' ? null : parseFloat(value) || 0 })
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ betrag: value === '' ? null : parseFloat(value) || 0 }),
     });
     recalc();
   }, 500);
 }
 
-// Summen live neu berechnen
+// ── Summen live neu berechnen ────────────────────────────────
 function recalc() {
-  const employees = <%- JSON.stringify(employees) %>;
   const inputs = document.querySelectorAll('.ma-cost-inp');
-  const vals = {};
-  inputs.forEach(inp => {
-    const maId = inp.closest('tr')?.querySelector('.ma-cost-inp')?.dataset?.id || inp.getAttribute('oninput').match(/'([^']+)'/)?.[1];
-    // Simpler: just read from oninput attribute
-  });
+  const sums   = { vz: 0, tz: 0, mj: 0 };
 
-  // Re-read all cost inputs by employee order
-  const sums = { vz: 0, tz: 0, mj: 0 };
   inputs.forEach((inp, i) => {
-    const e = employees[i];
+    const e = EMPLOYEES[i];
     if (!e) return;
-    const v = parseFloat(inp.value) || 0;
-    sums[e.type] = (sums[e.type] || 0) + v;
+    // Leer = Standard-Gehalt verwenden
+    const val = inp.value === '' ? (e.gehalt || 0) : (parseFloat(inp.value) || 0);
+    sums[e.type] = (sums[e.type] || 0) + val;
   });
 
-  const total = sums.vz + sums.tz + sums.mj;
+  const total   = sums.vz + sums.tz + sums.mj;
   const einnahmen = <%= gesamtEin %>;
-  const gewinn = einnahmen - total;
+  const gewinn  = einnahmen - total;
+  const fmt = n => n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
 
-  const fmt = n => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-
-  const sv = document.getElementById('sum-vz');     if(sv) sv.textContent = fmt(sums.vz);
-  const st = document.getElementById('sum-tz');     if(st) st.textContent = fmt(sums.tz);
-  const sm = document.getElementById('sum-mj');     if(sm) sm.textContent = fmt(sums.mj);
-  const so = document.getElementById('sum-total');  if(so) so.textContent = fmt(total);
+  ['vz','tz','mj'].forEach(t => {
+    const el = document.getElementById('sum-' + t);
+    if (el) el.textContent = fmt(sums[t]);
+  });
+  const st = document.getElementById('sum-total');
+  if (st) st.textContent = fmt(total);
   const gv = document.getElementById('gewinn-val');
   if (gv) {
-    gv.textContent = fmt(gewinn);
+    gv.textContent  = fmt(gewinn);
     gv.className = 'ma-gewinn-val ' + (gewinn >= 0 ? 'pos' : 'neg');
   }
 }
+
+// Enter im Edit-Modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('edit-modal').style.display !== 'none') saveEdit();
+});
 </script>
