@@ -124,6 +124,25 @@ async function initDB() {
   await db.execute("ALTER TABLE daily_cash ADD COLUMN revenue_7  REAL NOT NULL DEFAULT 0").catch(() => {});
   await db.execute("ALTER TABLE daily_cash ADD COLUMN revenue_19 REAL NOT NULL DEFAULT 0").catch(() => {});
 
+  // Migration: Mitarbeiter (anonyme Kürzel, DSGVO-konform)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS mitarbeiter (
+      id    TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      type  TEXT NOT NULL
+    )
+  `).catch(() => {});
+
+  // Migration: Mitarbeiter-Kosten pro Monat
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS mitarbeiter_kosten (
+      monat TEXT NOT NULL,
+      ma_id TEXT NOT NULL,
+      betrag REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (monat, ma_id)
+    )
+  `).catch(() => {});
+
   // Indexes for JOIN and ORDER BY performance
   await db.executeMultiple(`
     CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);

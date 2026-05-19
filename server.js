@@ -46,6 +46,7 @@ app.use('/artikel', requireAuth, require('./routes/articles'));
 app.use('/einkauf',     requireAuth, require('./routes/einkauf'));
 app.use('/tageskasse',  requireAuth, require('./routes/tageskasse'));
 app.use('/uebersicht',  requireAuth, require('./routes/uebersicht'));
+app.use('/mitarbeiter', requireAuth, require('./routes/mitarbeiter'));
 
 app.get('/', (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
