@@ -67,6 +67,36 @@
   </div>
 </div>
 
+<!-- ── GESAMTÜBERSICHT ────────────────────────────────────────────── -->
+<div class="db-uebersicht">
+
+  <div class="db-ub-row">
+    <div class="db-ub-card">
+      <div class="db-ub-label">Rechnungen (brutto)</div>
+      <div class="db-ub-val"><%= uebersicht.liefBrutto.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="db-ub-card">
+      <div class="db-ub-label">Tageskasse</div>
+      <div class="db-ub-val"><%= uebersicht.ladenBrutto.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-ein">
+      <div class="db-ub-label">Gesamt-Einnahmen</div>
+      <div class="db-ub-val"><%= uebersicht.gesamtEin.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-aus">
+      <div class="db-ub-label">Mitarbeiter-Kosten</div>
+      <div class="db-ub-val">− <%= uebersicht.maKosten.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-gewinn">
+      <div class="db-ub-label">Gewinn · <%= periodLabel %></div>
+      <div class="db-ub-val db-ub-gewinn-val <%= uebersicht.gewinn >= 0 ? 'pos' : 'neg' %>">
+        <%= uebersicht.gewinn.toFixed(2).replace('.',',') %> €
+      </div>
+    </div>
+  </div>
+
+</div>
+
 <!-- ── RECHNUNGSLISTE ─────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header">
@@ -105,3 +135,30 @@
   </table>
   <% } %>
 </div>
+
+<style>
+.db-uebersicht { margin-bottom: 22px; }
+.db-ub-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.db-ub-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+.db-ub-ein    { border-color: var(--gold); }
+.db-ub-aus    { background: #fffaf4; border-color: #f0a04b; }
+.db-ub-gewinn { background: var(--dark); border-color: var(--dark); }
+.db-ub-label {
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--mid); margin-bottom: 6px;
+}
+.db-ub-gewinn .db-ub-label { color: rgba(255,255,255,0.6); }
+.db-ub-val { font-size: 1.15rem; font-weight: 700; color: var(--dark); }
+.db-ub-gewinn-val { font-size: 1.3rem; }
+.db-ub-gewinn-val.pos { color: #69f0ae; }
+.db-ub-gewinn-val.neg { color: #ff5252; }
+</style>
