@@ -1,10 +1,10 @@
 <div class="page-header">
-  <h2>Eingangsrechnung erfassen</h2>
+  <h2><%= editMode ? 'Eingangsrechnung bearbeiten' : 'Eingangsrechnung erfassen' %></h2>
   <div style="display:flex;gap:10px">
-    <% if (!scanData) { %>
+    <% if (!scanData && !editMode) { %>
       <a href="/einkauf/scan" class="btn-secondary">📷 Stattdessen scannen</a>
     <% } %>
-    <a href="/einkauf" class="btn-secondary">← Zurück</a>
+    <a href="<%= editMode ? '/einkauf/' + editInvoice.id : '/einkauf' %>" class="btn-secondary">← Zurück</a>
   </div>
 </div>
 
@@ -14,7 +14,8 @@
 </div>
 <% } %>
 
-<form action="/einkauf/neu" method="POST" enctype="multipart/form-data" id="einkauf-form">
+<form action="<%= editMode ? '/einkauf/' + editInvoice.id + '/bearbeiten' : '/einkauf/neu' %>"
+      method="POST" enctype="multipart/form-data" id="einkauf-form">
 
   <div class="card">
     <h3 class="card-title">Lieferant & Rechnungsdaten</h3>
@@ -22,7 +23,7 @@
       <div class="form-group">
         <label>Lieferant <span class="required">*</span></label>
         <input type="text" name="supplier_name" list="supplier-list"
-               value="<%= scanData && scanData.supplier_name ? scanData.supplier_name : '' %>"
+               value="<%= editMode ? editInvoice.supplier_name : (scanData && scanData.supplier_name ? scanData.supplier_name : '') %>"
                placeholder="z.B. Großbäcker GmbH" required autocomplete="off" />
         <datalist id="supplier-list">
           <% suppliers.forEach(s => { %>
@@ -34,23 +35,28 @@
       <div class="form-group">
         <label>Rechnungsnummer</label>
         <input type="text" name="invoice_number"
-               value="<%= scanData && scanData.invoice_number ? scanData.invoice_number : '' %>"
+               value="<%= editMode ? editInvoice.invoice_number : (scanData && scanData.invoice_number ? scanData.invoice_number : '') %>"
                placeholder="z.B. RE-2026-0042" />
       </div>
       <div class="form-group">
         <label>Rechnungsdatum <span class="required">*</span></label>
-        <input type="date" name="date"
-               value="<%= scanData && scanData.date ? scanData.date : today %>" required />
+        <input type="date" name="date" id="inv-date"
+               value="<%= editMode ? editInvoice.date : (scanData && scanData.date ? scanData.date : today) %>" required />
       </div>
       <div class="form-group">
-        <label>Abrechnungsmonat <span style="color:var(--mid);font-weight:400">(optional)</span></label>
-        <input type="month" name="billing_month" value=""
-               placeholder="Monat für Auswertung"
+        <label>Abrechnungsmonat</label>
+        <input type="month" name="billing_month" id="billing-month"
+               value="<%= editMode ? (editInvoice.billing_month || '') : today.slice(0,7) %>"
                style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:.9rem;width:100%;background:var(--bg);color:var(--dark)" />
-        <small style="color:var(--mid);font-size:0.78rem">Falls abweichend vom Rechnungsdatum (z.B. Lieferung im Vormonat)</small>
+        <small style="color:var(--mid);font-size:0.78rem">Monat für Dashboard-Auswertung — wird automatisch aus dem Datum übernommen</small>
       </div>
       <div class="form-group">
-        <label>PDF hochladen <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+        <label>PDF <span style="color:var(--mid);font-weight:400">(<%= editMode && editInvoice.pdf_filename ? 'neues ersetzt vorhandenes' : 'optional' %>)</span></label>
+        <% if (editMode && editInvoice.pdf_filename) { %>
+          <div style="margin-bottom:6px">
+            <a href="/einkauf/uploads/<%= editInvoice.pdf_filename %>" target="_blank" class="link" style="font-size:0.85rem">Aktuelles PDF ↗</a>
+          </div>
+        <% } %>
         <input type="file" name="pdf" accept="application/pdf" />
         <small style="color:var(--mid);font-size:0.78rem">Max. 15 MB</small>
       </div>
@@ -77,18 +83,26 @@
 
   <div class="card">
     <h3 class="card-title">Notizen (intern)</h3>
-    <textarea name="notes" rows="2" placeholder="Interne Notiz …"></textarea>
+    <textarea name="notes" rows="2" placeholder="Interne Notiz …"><%= editMode ? (editInvoice.notes || '') : '' %></textarea>
   </div>
 
   <div style="display:flex;gap:12px;margin-bottom:40px">
-    <button type="submit" class="btn-primary btn-lg">Speichern</button>
-    <a href="/einkauf" class="btn-secondary btn-lg">Abbrechen</a>
+    <button type="submit" class="btn-primary btn-lg"><%= editMode ? 'Änderungen speichern' : 'Speichern' %></button>
+    <a href="<%= editMode ? '/einkauf/' + editInvoice.id : '/einkauf' %>" class="btn-secondary btn-lg">Abbrechen</a>
   </div>
 </form>
 
 <script>
 const UNITS     = ['kg', 'g', 'l', 'ml', 'Stück', 'Beutel', 'Karton', 'Palette', 'KG', 'ST'];
-const SCAN_DATA = <%- JSON.stringify(scanData || null) %>;
+const SCAN_DATA  = <%- JSON.stringify(scanData || null) %>;
+const EDIT_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
+const EDIT_MODE  = <%= editMode ? 'true' : 'false' %>;
+
+// Abrechnungsmonat automatisch aus Datum übernehmen
+document.getElementById('inv-date').addEventListener('change', function () {
+  const bm = document.getElementById('billing-month');
+  if (this.value) bm.value = this.value.slice(0, 7);
+});
 
 function buildUnitOptions(selected) {
   const all = selected && !UNITS.includes(selected) ? [...UNITS, selected] : UNITS;
@@ -98,19 +112,9 @@ function buildUnitOptions(selected) {
 function updateEinkaufTotal() {
   let sum = 0;
   document.querySelectorAll('.einkauf-row').forEach(row => {
-    const qty   = parseFloat(row.querySelector('.ei-qty').value.replace(',', '.'))   || 0;
-    const price = parseFloat(row.querySelector('.ei-price').value.replace(',', '.')) || 0;
-    sum += qty * price;
-  });
-  document.getElementById('einkauf-total').textContent = sum.toFixed(2).replace('.', ',') + ' €';
-}
-
-function updateEinkaufTotal() {
-  let sum = 0;
-  document.querySelectorAll('.einkauf-row').forEach(row => {
     const ltInput = row.querySelector('.ei-line-total');
     const lt = ltInput ? parseFloat(ltInput.value.replace(',', '.')) : NaN;
-    if (!isNaN(lt)) {
+    if (!isNaN(lt) && lt > 0) {
       sum += lt;
     } else {
       const qty   = parseFloat(row.querySelector('.ei-qty').value.replace(',', '.'))   || 0;
@@ -129,7 +133,6 @@ function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal =
   const qtyDisplay   = qty   !== '' ? String(qty).replace('.', ',')   : '';
   const priceDisplay = price !== '' ? parseFloat(price).toFixed(2).replace('.', ',') : '';
   const ltValue      = lineTotal !== null && lineTotal !== undefined ? String(lineTotal) : '';
-  const catValue     = category || 'Sonstiges';
 
   row.innerHTML = `
     <input type="text"   name="item_name"       class="ei-name"       value="${escHtml(name)}"         placeholder="z.B. Weizenmehl Typ 405" required />
@@ -149,7 +152,9 @@ function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal =
 
 document.getElementById('add-einkauf-row').addEventListener('click', () => addEinkaufRow());
 
-if (SCAN_DATA && Array.isArray(SCAN_DATA.items) && SCAN_DATA.items.length > 0) {
+if (EDIT_MODE && EDIT_ITEMS.length > 0) {
+  EDIT_ITEMS.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category));
+} else if (SCAN_DATA && Array.isArray(SCAN_DATA.items) && SCAN_DATA.items.length > 0) {
   SCAN_DATA.items.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category));
 } else {
   addEinkaufRow();

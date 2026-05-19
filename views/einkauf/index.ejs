@@ -50,6 +50,7 @@
         <td>
           <div class="action-links">
             <a href="/einkauf/<%= inv.id %>">Ansehen</a>
+            <a href="/einkauf/<%= inv.id %>/bearbeiten">Bearbeiten</a>
             <form action="/einkauf/<%= inv.id %>/loeschen" method="POST" style="display:inline"
                   onsubmit="return confirm('Eingangsrechnung wirklich löschen?')">
               <button type="submit" class="link-danger">Löschen</button>

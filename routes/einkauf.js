@@ -123,7 +123,8 @@ router.post('/scan', scanUpload.single('scan_file'), async (req, res) => {
       title: 'Eingangsrechnung erfassen',
       suppliers: suppliers.rows,
       today,
-      scanData: extracted
+      scanData: extracted,
+      editMode: false, editInvoice: null, editItems: [],
     });
   } catch (err) {
     fs.unlink(req.file?.path || '', () => {});
@@ -173,7 +174,10 @@ router.get('/', async (req, res) => {
 router.get('/neu', async (req, res) => {
   const suppliers = await db.execute('SELECT * FROM suppliers ORDER BY name');
   const today = new Date().toISOString().split('T')[0];
-  res.render('einkauf/form', { title: 'Eingangsrechnung erfassen', suppliers: suppliers.rows, today, scanData: null });
+  res.render('einkauf/form', {
+    title: 'Eingangsrechnung erfassen', suppliers: suppliers.rows, today, scanData: null,
+    editMode: false, editInvoice: null, editItems: [],
+  });
 });
 
 // Create
@@ -249,6 +253,95 @@ router.get('/:id', async (req, res) => {
     items: itemsRes.rows
   });
 });
+
+// Edit form
+router.get('/:id/bearbeiten', w(async (req, res) => {
+  const invRes = await db.execute(`
+    SELECT pi.*, s.name as supplier_name
+    FROM purchase_invoices pi LEFT JOIN suppliers s ON pi.supplier_id = s.id
+    WHERE pi.id = ?
+  `, [+req.params.id]);
+  const invoice = invRes.rows[0];
+  if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/einkauf'); }
+
+  const [itemsRes, suppliersRes] = await Promise.all([
+    db.execute('SELECT * FROM purchase_items WHERE purchase_invoice_id = ? ORDER BY id', [+req.params.id]),
+    db.execute('SELECT * FROM suppliers ORDER BY name'),
+  ]);
+  const today = new Date().toISOString().split('T')[0];
+  res.render('einkauf/form', {
+    title: 'Eingangsrechnung bearbeiten',
+    suppliers: suppliersRes.rows,
+    today,
+    scanData: null,
+    editMode: true,
+    editInvoice: invoice,
+    editItems: itemsRes.rows,
+  });
+}));
+
+// Save edit
+router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
+  const { supplier_name, invoice_number, date, notes, billing_month,
+          item_name, item_qty, item_unit, item_price } = req.body;
+
+  if (!supplier_name?.trim() || !date) {
+    req.flash('error', 'Lieferant und Datum sind erforderlich.');
+    return res.redirect(`/einkauf/${req.params.id}/bearbeiten`);
+  }
+
+  let supplierRes = await db.execute('SELECT id FROM suppliers WHERE name = ?', [supplier_name.trim()]);
+  let supplierId;
+  if (supplierRes.rows[0]) {
+    supplierId = supplierRes.rows[0].id;
+  } else {
+    const ins = await db.execute('INSERT INTO suppliers (name) VALUES (?)', [supplier_name.trim()]);
+    supplierId = Number(ins.lastInsertRowid);
+  }
+
+  // Altes PDF behalten wenn kein neues hochgeladen
+  let pdfFilename;
+  if (req.file) {
+    const old = await db.execute('SELECT pdf_filename FROM purchase_invoices WHERE id = ?', [+req.params.id]);
+    if (old.rows[0]?.pdf_filename) fs.unlink(path.join(UPLOADS_DIR, old.rows[0].pdf_filename), () => {});
+    pdfFilename = req.file.filename;
+  } else {
+    const old = await db.execute('SELECT pdf_filename FROM purchase_invoices WHERE id = ?', [+req.params.id]);
+    pdfFilename = old.rows[0]?.pdf_filename || '';
+  }
+
+  await db.execute(
+    'UPDATE purchase_invoices SET supplier_id=?, invoice_number=?, date=?, notes=?, pdf_filename=?, billing_month=? WHERE id=?',
+    [supplierId, invoice_number?.trim() || '', date, notes?.trim() || '', pdfFilename,
+     billing_month?.trim() || '', +req.params.id]
+  );
+
+  // Positionen neu setzen
+  await db.execute('DELETE FROM purchase_items WHERE purchase_invoice_id = ?', [+req.params.id]);
+  const { CATEGORIES } = require('../services/ocr');
+  const names      = Array.isArray(item_name)             ? item_name             : (item_name             ? [item_name]             : []);
+  const qtys       = Array.isArray(item_qty)              ? item_qty              : (item_qty              ? [item_qty]              : []);
+  const units      = Array.isArray(item_unit)             ? item_unit             : (item_unit             ? [item_unit]             : []);
+  const prices     = Array.isArray(item_price)            ? item_price            : (item_price            ? [item_price]            : []);
+  const lineTotals = Array.isArray(req.body.item_line_total) ? req.body.item_line_total : (req.body.item_line_total ? [req.body.item_line_total] : []);
+  const categories = Array.isArray(req.body.item_category)   ? req.body.item_category   : (req.body.item_category   ? [req.body.item_category]   : []);
+
+  for (let i = 0; i < names.length; i++) {
+    if (!names[i]?.trim()) continue;
+    const qty       = parseFloat(String(qtys[i]   || '1').replace(',', '.')) || 1;
+    const price     = parseFloat(String(prices[i] || '0').replace(',', '.')) || 0;
+    const unit      = units[i]?.trim() || 'kg';
+    const lineTotal = lineTotals[i] ? parseFloat(String(lineTotals[i]).replace(',', '.')) : null;
+    const category  = CATEGORIES.includes(categories[i]) ? categories[i] : 'Sonstiges';
+    await db.execute(
+      'INSERT INTO purchase_items (purchase_invoice_id, product_name, quantity, unit, unit_price, line_total, category) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [+req.params.id, names[i].trim(), qty, unit, price, isNaN(lineTotal) ? null : lineTotal, category]
+    );
+  }
+
+  req.flash('success', `Eingangsrechnung wurde aktualisiert.`);
+  res.redirect(`/einkauf/${req.params.id}`);
+}));
 
 // Delete
 router.post('/:id/loeschen', async (req, res) => {
