@@ -85,7 +85,7 @@ router.get('/', async (req, res) => {
       ORDER BY i.invoice_number DESC LIMIT 20
     `, args),
     db.execute("SELECT DISTINCT strftime('%Y', date) as year FROM invoices WHERE date != '' ORDER BY year DESC"),
-    db.execute(`SELECT COALESCE(SUM(revenue_7 + revenue_19), 0) as brutto FROM daily_cash ${cashWhere}`, args),
+    db.execute(`SELECT COALESCE(SUM(revenue_7), 0) as sum7, COALESCE(SUM(revenue_19), 0) as sum19 FROM daily_cash ${cashWhere}`, args),
   ]);
 
   const maKosten = await calcMaKosten(monats);
@@ -101,11 +101,22 @@ router.get('/', async (req, res) => {
     else                    periodLabel = String(activeYear);
   }
 
-  const liefNetto   = Number(rev.rows[0].netto)       || 0;
-  const liefBrutto  = liefNetto * 1.07;
-  const ladenBrutto = Number(cashRes.rows[0].brutto)  || 0;
-  const gesamtEin   = liefBrutto + ladenBrutto;
-  const gewinn      = gesamtEin - maKosten;
+  const liefNetto     = Number(rev.rows[0].netto)       || 0;
+  const liefBrutto    = liefNetto * 1.07;
+  const ladenBrutto7  = Number(cashRes.rows[0].sum7)    || 0;
+  const ladenBrutto19 = Number(cashRes.rows[0].sum19)   || 0;
+  const ladenBrutto   = ladenBrutto7 + ladenBrutto19;
+  const ladenNetto7   = ladenBrutto7  / 1.07;
+  const ladenNetto19  = ladenBrutto19 / 1.19;
+  const ladenNetto    = ladenNetto7 + ladenNetto19;
+  const gesamtNetto   = liefNetto + ladenNetto;
+  const gesamtEin     = liefBrutto + ladenBrutto;
+  const gewinn        = gesamtEin - maKosten;
+
+  const ust_lieferung = liefNetto * 0.07;
+  const ust_kasse7    = ladenBrutto7  - ladenNetto7;
+  const ust_kasse19   = ladenBrutto19 - ladenNetto19;
+  const ust_gesamt    = ust_lieferung + ust_kasse7 + ust_kasse19;
 
   res.render('dashboard', {
     title: 'Dashboard',
@@ -120,7 +131,13 @@ router.get('/', async (req, res) => {
     filter: { year: activeYear, month: activeMonth, quarter: activeQuarter },
     periodLabel,
     monthNames: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
-    uebersicht: { liefBrutto, ladenBrutto, gesamtEin, maKosten, gewinn },
+    uebersicht: {
+      liefNetto, liefBrutto,
+      ladenNetto, ladenBrutto, ladenBrutto7, ladenBrutto19,
+      gesamtNetto, gesamtEin,
+      maKosten, gewinn,
+      ust_lieferung, ust_kasse7, ust_kasse19, ust_gesamt,
+    },
   });
 });
 

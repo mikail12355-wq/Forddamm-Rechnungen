@@ -70,18 +70,22 @@
 <!-- ── GESAMTÜBERSICHT ────────────────────────────────────────────── -->
 <div class="db-uebersicht">
 
+  <div class="db-ub-section-label">Einnahmen · <%= periodLabel %></div>
   <div class="db-ub-row">
     <div class="db-ub-card">
-      <div class="db-ub-label">Rechnungen (brutto)</div>
-      <div class="db-ub-val"><%= uebersicht.liefBrutto.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-label">Rechnungen (netto)</div>
+      <div class="db-ub-val"><%= uebersicht.liefNetto.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">+ 7% USt → <strong><%= uebersicht.liefBrutto.toFixed(2).replace('.',',') %> €</strong></div>
     </div>
     <div class="db-ub-card">
-      <div class="db-ub-label">Tageskasse</div>
-      <div class="db-ub-val"><%= uebersicht.ladenBrutto.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-label">Tageskasse (netto)</div>
+      <div class="db-ub-val"><%= uebersicht.ladenNetto.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">brutto → <strong><%= uebersicht.ladenBrutto.toFixed(2).replace('.',',') %> €</strong></div>
     </div>
     <div class="db-ub-card db-ub-ein">
       <div class="db-ub-label">Gesamt-Einnahmen</div>
       <div class="db-ub-val"><%= uebersicht.gesamtEin.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">netto: <%= uebersicht.gesamtNetto.toFixed(2).replace('.',',') %> €</div>
     </div>
     <div class="db-ub-card db-ub-aus">
       <div class="db-ub-label">Mitarbeiter-Kosten</div>
@@ -92,6 +96,30 @@
       <div class="db-ub-val db-ub-gewinn-val <%= uebersicht.gewinn >= 0 ? 'pos' : 'neg' %>">
         <%= uebersicht.gewinn.toFixed(2).replace('.',',') %> €
       </div>
+    </div>
+  </div>
+
+  <!-- ── FINANZAMT ──────────────────────────────────────────────── -->
+  <div class="db-ub-section-label" style="margin-top:18px;">Umsatzsteuer (Finanzamt) · <%= periodLabel %></div>
+  <div class="db-ub-row">
+    <div class="db-ub-card db-ub-ust">
+      <div class="db-ub-label">USt Rechnungen (7%)</div>
+      <div class="db-ub-val"><%= uebersicht.ust_lieferung.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">Netto: <%= uebersicht.liefNetto.toFixed(2).replace('.',',') %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-ust">
+      <div class="db-ub-label">USt Kasse 7%</div>
+      <div class="db-ub-val"><%= uebersicht.ust_kasse7.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">Brutto: <%= uebersicht.ladenBrutto7 ? uebersicht.ladenBrutto7.toFixed(2).replace('.',',') : '0,00' %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-ust">
+      <div class="db-ub-label">USt Kasse 19%</div>
+      <div class="db-ub-val"><%= uebersicht.ust_kasse19.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub">Brutto: <%= uebersicht.ladenBrutto19 ? uebersicht.ladenBrutto19.toFixed(2).replace('.',',') : '0,00' %> €</div>
+    </div>
+    <div class="db-ub-card db-ub-ust-total">
+      <div class="db-ub-label">Gesamt-USt ans Finanzamt</div>
+      <div class="db-ub-val db-ub-ust-total-val"><%= uebersicht.ust_gesamt.toFixed(2).replace('.',',') %> €</div>
     </div>
   </div>
 
@@ -138,6 +166,10 @@
 
 <style>
 .db-uebersicht { margin-bottom: 22px; }
+.db-ub-section-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--mid); margin-bottom: 8px;
+}
 .db-ub-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -152,13 +184,22 @@
 .db-ub-ein    { border-color: var(--gold); }
 .db-ub-aus    { background: #fffaf4; border-color: #f0a04b; }
 .db-ub-gewinn { background: var(--dark); border-color: var(--dark); }
+.db-ub-ust       { background: #fdf6ff; border-color: #c084fc; }
+.db-ub-ust-total { background: #7c3aed; border-color: #7c3aed; }
 .db-ub-label {
   font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--mid); margin-bottom: 6px;
 }
-.db-ub-gewinn .db-ub-label { color: rgba(255,255,255,0.6); }
+.db-ub-gewinn .db-ub-label,
+.db-ub-ust-total .db-ub-label { color: rgba(255,255,255,0.6); }
 .db-ub-val { font-size: 1.15rem; font-weight: 700; color: var(--dark); }
+.db-ub-ust-total .db-ub-val { color: #fff; }
+.db-ub-sub {
+  font-size: 0.75rem; color: var(--mid); margin-top: 4px;
+}
+.db-ub-sub strong { color: var(--dark); }
 .db-ub-gewinn-val { font-size: 1.3rem; }
 .db-ub-gewinn-val.pos { color: #69f0ae; }
 .db-ub-gewinn-val.neg { color: #ff5252; }
+.db-ub-ust-total-val { font-size: 1.3rem; color: #fff; }
 </style>
