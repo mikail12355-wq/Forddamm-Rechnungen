@@ -32,14 +32,22 @@ async function calcMaKosten(monats) {
   const overrideMap = {};
   overridesRes.rows.forEach(r => { overrideMap[`${r.ma_id}:${r.monat}`] = r.betrag; });
 
-  if (!monats) {
-    // "Alle" – summe nur tatsächliche Override-Einträge (kein Gehalt-Fallback bei unbekannter Monatszahl)
-    return overridesRes.rows.reduce((s, r) => s + r.betrag, 0);
+  // Berechne die Monatsliste: bei "Alle" alle Monate aus Rechnungen + Tageskasse verwenden
+  let liste = monats;
+  if (!liste) {
+    const mRes = await db.execute(`
+      SELECT DISTINCT strftime('%Y-%m', date) as m FROM invoices WHERE date != ''
+      UNION
+      SELECT DISTINCT strftime('%Y-%m', date) as m FROM daily_cash WHERE date != ''
+      ORDER BY m
+    `);
+    liste = mRes.rows.map(r => r.m).filter(Boolean);
+    if (liste.length === 0) return 0;
   }
 
   let total = 0;
   for (const emp of employees) {
-    for (const m of monats) {
+    for (const m of liste) {
       const key = `${emp.id}:${m}`;
       total += overrideMap[key] !== undefined ? overrideMap[key] : (emp.gehalt || 0);
     }
