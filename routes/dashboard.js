@@ -75,11 +75,12 @@ router.get('/', async (req, res) => {
     }
   }
 
-  const where     = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
-  const cashWhere = where.replace(/i\.date/g, 'date');
-  const monats    = buildMonatsList(year, quarter, month);
+  const where         = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const cashWhere     = where.replace(/i\.date/g, 'date');
+  const purchaseWhere = where.replace(/i\.date/g, 'pi.date');
+  const monats        = buildMonatsList(year, quarter, month);
 
-  const [inv, cust, art, rev, latest, yearsRes, cashRes] = await Promise.all([
+  const [inv, cust, art, rev, latest, yearsRes, cashRes, einkaufRes] = await Promise.all([
     db.execute(`SELECT COUNT(*) as count FROM invoices i ${where}`, args),
     db.execute('SELECT COUNT(*) as count FROM customers'),
     db.execute('SELECT COUNT(*) as count FROM articles WHERE active = 1'),
@@ -94,6 +95,12 @@ router.get('/', async (req, res) => {
     `, args),
     db.execute("SELECT DISTINCT strftime('%Y', date) as year FROM invoices WHERE date != '' ORDER BY year DESC"),
     db.execute(`SELECT COALESCE(SUM(revenue_7), 0) as sum7, COALESCE(SUM(revenue_19), 0) as sum19 FROM daily_cash ${cashWhere}`, args),
+    db.execute(`
+      SELECT COALESCE(SUM(COALESCE(pit.line_total, pit.quantity * pit.unit_price)), 0) as total
+      FROM purchase_items pit
+      JOIN purchase_invoices pi ON pit.purchase_invoice_id = pi.id
+      ${purchaseWhere}
+    `, args),
   ]);
 
   const maKosten = await calcMaKosten(monats);
@@ -119,7 +126,8 @@ router.get('/', async (req, res) => {
   const ladenNetto    = ladenNetto7 + ladenNetto19;
   const gesamtNetto   = liefNetto + ladenNetto;
   const gesamtEin     = liefBrutto + ladenBrutto;
-  const gewinn        = gesamtEin - maKosten;
+  const einkaufKosten = Number(einkaufRes.rows[0].total) || 0;
+  const gewinn        = gesamtEin - maKosten - einkaufKosten;
 
   const ust_lieferung = liefNetto * 0.07;
   const ust_kasse7    = ladenBrutto7  - ladenNetto7;
@@ -143,7 +151,7 @@ router.get('/', async (req, res) => {
       liefNetto, liefBrutto,
       ladenNetto, ladenBrutto, ladenBrutto7, ladenBrutto19,
       gesamtNetto, gesamtEin,
-      maKosten, gewinn,
+      maKosten, einkaufKosten, gewinn,
       ust_lieferung, ust_kasse7, ust_kasse19, ust_gesamt,
     },
   });

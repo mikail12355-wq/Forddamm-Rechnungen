@@ -91,6 +91,11 @@
       <div class="db-ub-label">Mitarbeiter-Kosten</div>
       <div class="db-ub-val">− <%= uebersicht.maKosten.toFixed(2).replace('.',',') %> €</div>
     </div>
+    <div class="db-ub-card db-ub-aus">
+      <div class="db-ub-label">Einkauf / Lieferanten</div>
+      <div class="db-ub-val">− <%= uebersicht.einkaufKosten.toFixed(2).replace('.',',') %> €</div>
+      <div class="db-ub-sub"><a href="/einkauf" style="color:inherit;text-decoration:underline;font-size:0.72rem">→ Einkauf verwalten</a></div>
+    </div>
     <div class="db-ub-card db-ub-gewinn">
       <div class="db-ub-label">Gewinn · <%= periodLabel %></div>
       <div class="db-ub-val db-ub-gewinn-val <%= uebersicht.gewinn >= 0 ? 'pos' : 'neg' %>">
