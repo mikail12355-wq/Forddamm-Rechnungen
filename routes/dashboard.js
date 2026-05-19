@@ -56,12 +56,19 @@ async function calcMaKosten(monats) {
 }
 
 router.get('/', async (req, res) => {
-  const { year, month, quarter } = req.query;
+  // Kein Filter gesetzt → aktuellen Monat als Standard
+  if (Object.keys(req.query).length === 0) {
+    const now = new Date();
+    return res.redirect(`/dashboard?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
+  }
+
+  const { year, month, quarter, all } = req.query;
+  // "Alle" explizit über ?all=1
 
   let whereParts = [];
   let args = [];
 
-  if (year && year !== 'all') {
+  if (!all && year && year !== 'all') {
     whereParts.push("strftime('%Y', i.date) = ?");
     args.push(String(year));
 
@@ -83,7 +90,7 @@ router.get('/', async (req, res) => {
   const EFF = `COALESCE(NULLIF(pi.billing_month,''), strftime('%Y-%m', pi.date))`;
   let purchaseParts = [];
   let purchaseArgs  = [...args];
-  if (year && year !== 'all') {
+  if (!all && year && year !== 'all') {
     purchaseParts.push(`substr(${EFF}, 1, 4) = ?`);
     if (month) {
       purchaseParts.push(`${EFF} = ?`);
@@ -123,9 +130,9 @@ router.get('/', async (req, res) => {
 
   const maKosten = await calcMaKosten(monats);
 
-  const activeYear    = year || 'all';
-  const activeMonth   = month   ? Number(month)   : null;
-  const activeQuarter = quarter ? Number(quarter) : null;
+  const activeYear    = all ? 'all' : (year || 'all');
+  const activeMonth   = (!all && month)   ? Number(month)   : null;
+  const activeQuarter = (!all && quarter) ? Number(quarter) : null;
 
   let periodLabel = 'Gesamt';
   if (activeYear !== 'all') {

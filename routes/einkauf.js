@@ -183,14 +183,16 @@ router.get('/neu', async (req, res) => {
 
 // Create
 router.post('/neu', upload.single('pdf'), async (req, res) => {
-  const { supplier_name, invoice_number, date, notes, item_name, item_qty, item_unit, item_price, billing_month } = req.body;
+  const { supplier_name, invoice_number, date, notes, item_name, item_qty, item_unit, item_price,
+          billing_year, billing_month_num } = req.body;
 
   if (!supplier_name?.trim() || !date) {
     req.flash('error', 'Lieferant und Datum sind erforderlich.');
     return res.redirect('/einkauf/neu');
   }
 
-  const billingMonth = billing_month?.trim() || '';
+  const billingMonth = (billing_year && billing_month_num)
+    ? `${billing_year}-${billing_month_num}` : '';
 
   let supplierRes = await db.execute('SELECT id FROM suppliers WHERE name = ?', [supplier_name.trim()]);
   let supplierId;
@@ -283,13 +285,16 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 
 // Save edit
 router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
-  const { supplier_name, invoice_number, date, notes, billing_month,
+  const { supplier_name, invoice_number, date, notes, billing_year, billing_month_num,
           item_name, item_qty, item_unit, item_price } = req.body;
 
   if (!supplier_name?.trim() || !date) {
     req.flash('error', 'Lieferant und Datum sind erforderlich.');
     return res.redirect(`/einkauf/${req.params.id}/bearbeiten`);
   }
+
+  const billingMonth = (billing_year && billing_month_num)
+    ? `${billing_year}-${billing_month_num}` : '';
 
   let supplierRes = await db.execute('SELECT id FROM suppliers WHERE name = ?', [supplier_name.trim()]);
   let supplierId;
@@ -314,7 +319,7 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
   await db.execute(
     'UPDATE purchase_invoices SET supplier_id=?, invoice_number=?, date=?, notes=?, pdf_filename=?, billing_month=? WHERE id=?',
     [supplierId, invoice_number?.trim() || '', date, notes?.trim() || '', pdfFilename,
-     billing_month?.trim() || '', +req.params.id]
+     billingMonth, +req.params.id]
   );
 
   // Positionen neu setzen

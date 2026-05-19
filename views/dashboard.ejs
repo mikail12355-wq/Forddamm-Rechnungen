@@ -9,7 +9,7 @@
   <!-- Jahre -->
   <div class="filter-group">
     <span class="filter-label">Jahr</span>
-    <a href="/dashboard" class="filter-pill <%= filter.year === 'all' ? 'active' : '' %>">Alle</a>
+    <a href="/dashboard?all=1" class="filter-pill <%= filter.year === 'all' ? 'active' : '' %>">Alle</a>
     <% availableYears.forEach(y => { %>
       <a href="/dashboard?year=<%= y %>"
          class="filter-pill <%= filter.year == y && !filter.month && !filter.quarter ? 'active' : '' %>">
