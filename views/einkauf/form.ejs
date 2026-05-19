@@ -43,6 +43,13 @@
                value="<%= scanData && scanData.date ? scanData.date : today %>" required />
       </div>
       <div class="form-group">
+        <label>Abrechnungsmonat <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+        <input type="month" name="billing_month" value=""
+               placeholder="Monat für Auswertung"
+               style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:.9rem;width:100%;background:var(--bg);color:var(--dark)" />
+        <small style="color:var(--mid);font-size:0.78rem">Falls abweichend vom Rechnungsdatum (z.B. Lieferung im Vormonat)</small>
+      </div>
+      <div class="form-group">
         <label>PDF hochladen <span style="color:var(--mid);font-weight:400">(optional)</span></label>
         <input type="file" name="pdf" accept="application/pdf" />
         <small style="color:var(--mid);font-size:0.78rem">Max. 15 MB</small>

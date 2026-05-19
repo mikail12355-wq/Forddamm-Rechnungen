@@ -13,6 +13,12 @@
       <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Datum</div>
       <div><%= new Date(invoice.date).toLocaleDateString('de-DE') %></div>
     </div>
+    <% if (invoice.billing_month) { %>
+    <div>
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Abrechnungsmonat</div>
+      <div style="font-weight:600;color:var(--gold)"><%= invoice.billing_month %></div>
+    </div>
+    <% } %>
     <div>
       <div style="font-size:0.78rem;color:var(--mid);margin-bottom:2px">Rechnungsnummer</div>
       <div><%= invoice.invoice_number || '—' %></div>

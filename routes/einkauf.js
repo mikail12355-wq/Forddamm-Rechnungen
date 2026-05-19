@@ -178,12 +178,14 @@ router.get('/neu', async (req, res) => {
 
 // Create
 router.post('/neu', upload.single('pdf'), async (req, res) => {
-  const { supplier_name, invoice_number, date, notes, item_name, item_qty, item_unit, item_price } = req.body;
+  const { supplier_name, invoice_number, date, notes, item_name, item_qty, item_unit, item_price, billing_month } = req.body;
 
   if (!supplier_name?.trim() || !date) {
     req.flash('error', 'Lieferant und Datum sind erforderlich.');
     return res.redirect('/einkauf/neu');
   }
+
+  const billingMonth = billing_month?.trim() || '';
 
   let supplierRes = await db.execute('SELECT id FROM suppliers WHERE name = ?', [supplier_name.trim()]);
   let supplierId;
@@ -196,8 +198,8 @@ router.post('/neu', upload.single('pdf'), async (req, res) => {
 
   const pdfFilename = req.file ? req.file.filename : '';
   const invRes = await db.execute(
-    'INSERT INTO purchase_invoices (supplier_id, invoice_number, date, notes, pdf_filename) VALUES (?, ?, ?, ?, ?)',
-    [supplierId, invoice_number?.trim() || '', date, notes?.trim() || '', pdfFilename]
+    'INSERT INTO purchase_invoices (supplier_id, invoice_number, date, notes, pdf_filename, billing_month) VALUES (?, ?, ?, ?, ?, ?)',
+    [supplierId, invoice_number?.trim() || '', date, notes?.trim() || '', pdfFilename, billingMonth]
   );
   const invoiceId = Number(invRes.lastInsertRowid);
 

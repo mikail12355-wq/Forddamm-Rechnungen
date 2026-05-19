@@ -75,10 +75,28 @@ router.get('/', async (req, res) => {
     }
   }
 
-  const where         = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
-  const cashWhere     = where.replace(/i\.date/g, 'date');
-  const purchaseWhere = where.replace(/i\.date/g, 'pi.date');
-  const monats        = buildMonatsList(year, quarter, month);
+  const where     = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const cashWhere = where.replace(/i\.date/g, 'date');
+  const monats    = buildMonatsList(year, quarter, month);
+
+  // Einkauf-Filter: billing_month wenn gesetzt, sonst pi.date
+  const EFF = `COALESCE(NULLIF(pi.billing_month,''), strftime('%Y-%m', pi.date))`;
+  let purchaseParts = [];
+  let purchaseArgs  = [...args];
+  if (year && year !== 'all') {
+    purchaseParts.push(`substr(${EFF}, 1, 4) = ?`);
+    if (month) {
+      purchaseParts.push(`${EFF} = ?`);
+      purchaseArgs = [String(year), `${year}-${String(month).padStart(2,'0')}`];
+    } else if (quarter) {
+      const qm = QUARTER_MONTHS[Number(quarter)] || [];
+      purchaseParts.push(`substr(${EFF}, 6, 2) IN (${qm.map(() => '?').join(',')})`);
+      purchaseArgs = [String(year), ...qm];
+    } else {
+      purchaseArgs = [String(year)];
+    }
+  }
+  const purchaseWhere = purchaseParts.length ? `WHERE ${purchaseParts.join(' AND ')}` : '';
 
   const [inv, cust, art, rev, latest, yearsRes, cashRes, einkaufRes] = await Promise.all([
     db.execute(`SELECT COUNT(*) as count FROM invoices i ${where}`, args),
@@ -100,7 +118,7 @@ router.get('/', async (req, res) => {
       FROM purchase_items pit
       JOIN purchase_invoices pi ON pit.purchase_invoice_id = pi.id
       ${purchaseWhere}
-    `, args),
+    `, purchaseArgs),
   ]);
 
   const maKosten = await calcMaKosten(monats);

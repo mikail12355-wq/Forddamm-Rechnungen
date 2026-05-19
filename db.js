@@ -146,6 +146,9 @@ async function initDB() {
   // Migration: Standard-Monatsgehalt pro Mitarbeiter
   await db.execute("ALTER TABLE mitarbeiter ADD COLUMN gehalt REAL DEFAULT 0").catch(() => {});
 
+  // Migration: Abrechnungsmonat für Einkaufsrechnungen (YYYY-MM, optional)
+  await db.execute("ALTER TABLE purchase_invoices ADD COLUMN billing_month TEXT DEFAULT ''").catch(() => {});
+
   // Indexes for JOIN and ORDER BY performance
   await db.executeMultiple(`
     CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);

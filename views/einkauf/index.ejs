@@ -16,6 +16,7 @@
     <thead>
       <tr>
         <th>Datum</th>
+        <th>Abrech.-Monat</th>
         <th>Lieferant</th>
         <th>Rechnungs-Nr.</th>
         <th>Positionen</th>
@@ -28,6 +29,13 @@
       <% invoices.forEach(inv => { %>
       <tr>
         <td><%= new Date(inv.date).toLocaleDateString('de-DE') %></td>
+        <td>
+          <% if (inv.billing_month) { %>
+            <span class="badge badge-gray"><%= inv.billing_month %></span>
+          <% } else { %>
+            <span style="color:var(--mid);font-size:0.8rem">—</span>
+          <% } %>
+        </td>
         <td><strong><%= inv.supplier_name || '—' %></strong></td>
         <td><%= inv.invoice_number || '—' %></td>
         <td><span class="badge badge-gray"><%= inv.item_count || 0 %> Pos.</span></td>
