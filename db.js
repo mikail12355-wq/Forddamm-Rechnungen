@@ -100,6 +100,8 @@ async function initDB() {
   await db.execute("ALTER TABLE purchase_items ADD COLUMN category TEXT DEFAULT 'Sonstiges'").catch(() => {});
   // Migration: delivery_contact moved from customers to invoices
   await db.execute("ALTER TABLE invoices ADD COLUMN delivery_contact TEXT DEFAULT ''").catch(() => {});
+  // Migration: cost_center moved from customers to invoices (per-invoice entry)
+  await db.execute("ALTER TABLE invoices ADD COLUMN cost_center TEXT DEFAULT ''").catch(() => {});
   // Migration: payment method (transfer = Überweisung, cash = Barzahlung)
   await db.execute("ALTER TABLE invoices ADD COLUMN payment_method TEXT DEFAULT 'transfer'").catch(() => {});
   // Migration: payment tracking

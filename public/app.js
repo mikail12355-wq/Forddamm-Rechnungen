@@ -104,10 +104,13 @@ document.querySelectorAll('.flash').forEach(el => {
       if (!opt || !opt.value) { customerPreview.style.display = 'none'; return; }
       document.getElementById('preview-billing').textContent  = opt.dataset.billing  || '—';
       document.getElementById('preview-delivery').textContent = opt.dataset.delivery || '—';
-      const cc = opt.dataset.costcenter;
-      document.getElementById('preview-costcenter').textContent = cc || '—';
-      document.getElementById('preview-costcenter-row').style.display = cc ? '' : 'none';
       customerPreview.style.display = 'flex';
+
+      // Pre-fill cost center from customer data only if the field is currently empty
+      const ccInput = document.getElementById('cost-center-input');
+      if (ccInput && !ccInput.value.trim()) {
+        ccInput.value = opt.dataset.costcenter || '';
+      }
     };
     customerSelect.addEventListener('change', () => {
       showPreview();

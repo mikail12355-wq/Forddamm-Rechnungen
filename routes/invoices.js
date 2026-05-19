@@ -40,7 +40,7 @@ router.get('/export', w(async (req, res) => {
   const [fullRes, itemsRes] = await Promise.all([
     db.execute(`
       SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-        c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+        c.delivery_street, c.delivery_zip, c.delivery_city
       FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
       WHERE i.id IN (${ph}) ORDER BY i.invoice_number ASC
     `, ids),
@@ -108,7 +108,7 @@ router.get('/neu', w(async (req, res) => {
 
 router.post('/neu', w(async (req, res) => {
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, item_name, item_qty, item_price,
+          order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price,
           payment_method } = req.body;
 
   if (!invoice_number || !date || !customer_id) {
@@ -127,9 +127,9 @@ router.post('/neu', w(async (req, res) => {
   }
 
   const invRes = await db.execute(
-    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, payment_method)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', delivery_contact||'', payment_method === 'cash' ? 'cash' : 'transfer']
+    `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, cost_center, payment_method)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id, order_number||'', notes||'', delivery_contact||'', cost_center||'', payment_method === 'cash' ? 'cash' : 'transfer']
   );
   const invoiceId = Number(invRes.lastInsertRowid);
 
@@ -148,7 +148,7 @@ router.post('/neu', w(async (req, res) => {
 router.get('/:id', w(async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+      c.delivery_street, c.delivery_zip, c.delivery_city
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
   const invoice = invRes.rows[0];
@@ -164,7 +164,7 @@ router.get('/:id', w(async (req, res) => {
 router.get('/:id/pdf', w(async (req, res) => {
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city, c.cost_center
+      c.delivery_street, c.delivery_zip, c.delivery_city
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
   const invoice = invRes.rows[0];
@@ -200,7 +200,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, item_name, item_qty, item_price,
+          order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price,
           payment_method } = req.body;
 
   const validItems = parseItems(item_name, item_qty, item_price);
@@ -210,9 +210,9 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
   }
   await db.execute(
     `UPDATE invoices SET invoice_number=?, date=?, delivery_from=?, delivery_to=?,
-     customer_id=?, order_number=?, notes=?, delivery_contact=?, payment_method=? WHERE id=?`,
+     customer_id=?, order_number=?, notes=?, delivery_contact=?, cost_center=?, payment_method=? WHERE id=?`,
     [+invoice_number, date, delivery_from||'', delivery_to||'', +customer_id,
-     order_number||'', notes||'', delivery_contact||'', payment_method === 'cash' ? 'cash' : 'transfer', +req.params.id]
+     order_number||'', notes||'', delivery_contact||'', cost_center||'', payment_method === 'cash' ? 'cash' : 'transfer', +req.params.id]
   );
   await db.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [+req.params.id]);
   for (let i = 0; i < validItems.length; i++) {
