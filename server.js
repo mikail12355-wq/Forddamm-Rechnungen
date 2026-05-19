@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session);
 const flash = require('connect-flash');
 const ejsLayouts = require('express-ejs-layouts');
 const path = require('path');
@@ -21,7 +22,8 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'forddamm-fallback-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 8 * 60 * 60 * 1000 }
+  cookie: { maxAge: 8 * 60 * 60 * 1000 },
+  store: new MemoryStore({ checkPeriod: 8 * 60 * 60 * 1000 }),
 }));
 
 app.use(flash());
