@@ -1,5 +1,5 @@
 <div class="page-header">
-  <h2>Angebot Nr. <%= quote.quote_number %></h2>
+  <h2>Angebot</h2>
   <div class="page-header-actions">
     <a href="/angebote/<%= quote.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
     <a href="/angebote/<%= quote.id %>/bearbeiten" class="btn-secondary">Bearbeiten</a>
@@ -17,11 +17,6 @@
       <div>Forddamm 13</div>
       <div>12107 Berlin</div>
     </div>
-  </div>
-
-  <div style="text-align:right;margin-bottom:8px">
-    <span style="font-size:2rem;font-weight:700;color:#c8913a;letter-spacing:2px">ANGEBOT</span>
-    <div style="font-size:1rem;color:#2b1e0f;font-weight:600">Nr. <%= quote.quote_number %></div>
   </div>
 
   <!-- Addresses -->
@@ -62,8 +57,6 @@
       <% } %>
     </div>
     <div>
-      <span class="inv-label">Angebot Nr.</span> <strong><%= quote.quote_number %></strong>
-      &nbsp;&nbsp;&nbsp;
       <span class="inv-label">Datum:</span> <span><%= new Date(quote.date).toLocaleDateString('de-DE') %></span>
       <% if (quote.valid_until) { %>
         &nbsp;&nbsp;&nbsp;
@@ -75,6 +68,16 @@
       <% } %>
     </div>
   </div>
+
+  <!-- ANGEBOT + Freitext zentriert -->
+  <div style="text-align:center;margin:24px 0 8px">
+    <div style="font-size:2rem;font-weight:700;color:#c8913a;letter-spacing:2px">ANGEBOT</div>
+    <% if (quote.subject && quote.subject.trim()) { %>
+      <div style="font-size:1.15rem;color:#2b1e0f;margin-top:6px"><%= quote.subject %></div>
+    <% } %>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #d4b896;margin:12px 0 16px" />
 
   <!-- Table -->
   <table class="inv-table">

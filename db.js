@@ -166,6 +166,7 @@ async function initDB() {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `).catch(() => {});
+  await db.execute("ALTER TABLE quotes ADD COLUMN subject TEXT DEFAULT ''").catch(() => {});
   await db.execute(`
     CREATE TABLE IF NOT EXISTS quote_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -71,7 +71,6 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th>Nr.</th>
         <th>Datum</th>
         <th>Gültig bis</th>
         <th>Kunde</th>
@@ -89,7 +88,6 @@
         const expired = q.valid_until && q.valid_until < today;
       %>
       <tr>
-        <td><strong>#<%= q.quote_number %></strong></td>
         <td><%= new Date(q.date).toLocaleDateString('de-DE') %></td>
         <td>
           <% if (q.valid_until) { %>

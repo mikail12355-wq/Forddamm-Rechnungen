@@ -40,8 +40,7 @@ function drawContinuationHeader(doc, quote) {
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(11)
      .text('BÄCKEREI FORDDAMM', mL, y0, { lineBreak: false });
   doc.fillColor(C.gray).font('Helvetica').fontSize(8.5)
-     .text(`Angebot Nr. ${quote.quote_number}  ·  Fortsetzung`,
-           mL, y0, { width: cW, align: 'right', lineBreak: false });
+     .text('Angebot  ·  Fortsetzung', mL, y0, { width: cW, align: 'right', lineBreak: false });
   const lineY = y0 + 19;
   doc.rect(mL, lineY, cW, 1.5).fill(C.gold);
   return lineY + 16;
@@ -60,7 +59,7 @@ function drawTableHeader(doc, y) {
 }
 
 function generateAngebotPDF(quote, items, stream) {
-  const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Angebot Nr. ${quote.quote_number}` } });
+  const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: 'Angebot' } });
   doc.pipe(stream);
 
   let y = 44;
@@ -70,11 +69,6 @@ function generateAngebotPDF(quote, items, stream) {
      .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
   doc.fillColor(C.gold).font('Helvetica').fontSize(8)
      .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
-
-  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(26)
-     .text('ANGEBOT', mL, y, { width: cW, align: 'right', lineBreak: false });
-  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(14)
-     .text(`Nr. ${quote.quote_number}`, mL, y + 32, { width: cW, align: 'right', lineBreak: false });
 
   y += 50;
   doc.rect(mL, y, cW, 1.5).fill(C.gold);
@@ -129,7 +123,23 @@ function generateAngebotPDF(quote, items, stream) {
     doc.fillColor(C.gray).font('Helvetica').fontSize(7).text(label, mx, y, { lineBreak: false });
     doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text(val,   mx, y + 11, { lineBreak: false });
   });
-  y += 40;
+  y += 48;
+
+  // ════ ANGEBOT-TITEL + FREITEXT (zentriert) ═══════════════════════════════════
+  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(26)
+     .text('ANGEBOT', mL, y, { width: cW, align: 'center', lineBreak: false });
+  y += 36;
+
+  if (quote.subject && quote.subject.trim()) {
+    doc.fillColor(C.dark).font('Helvetica').fontSize(13)
+       .text(quote.subject.trim(), mL, y, { width: cW, align: 'center' });
+    y = doc.y + 16;
+  } else {
+    y += 10;
+  }
+
+  doc.rect(mL, y, cW, 1).fill(C.border);
+  y += 16;
 
   // ════ TABELLE ════════════════════════════════════════════════════════════════
   y = drawTableHeader(doc, y);

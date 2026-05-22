@@ -21,33 +21,27 @@ router.get('/', w(async (req, res) => {
 
 // ─── NEUES ANGEBOT ────────────────────────────────────────────────────────────
 router.get('/neu', w(async (req, res) => {
-  const [custRes, artRes, lastRes, pricesRes] = await Promise.all([
+  const [custRes, artRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
-    db.execute('SELECT MAX(quote_number) as max FROM quotes'),
     db.execute('SELECT customer_id, article_id, unit_price FROM customer_prices')
   ]);
-  const nextNumber = (Number(lastRes.rows[0].max) || 0) + 1;
   const today = new Date().toISOString().split('T')[0];
   const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   res.render('angebote/new', {
     title: 'Neues Angebot', customers: custRes.rows, articles: artRes.rows,
-    nextNumber, today, validUntil, editQuote: null, editItems: [],
+    today, validUntil, editQuote: null, editItems: [],
     customerPricesMap: buildPricesMap(pricesRes.rows)
   });
 }));
 
 router.post('/neu', w(async (req, res) => {
-  const { quote_number, date, valid_until, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price } = req.body;
+  const { date, valid_until, delivery_from, delivery_to, customer_id,
+          order_number, notes, delivery_contact, cost_center, subject,
+          item_name, item_qty, item_price } = req.body;
 
-  if (!quote_number || !date || !customer_id) {
+  if (!date || !customer_id) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
-    return res.redirect('/angebote/neu');
-  }
-  const existing = await db.execute('SELECT id FROM quotes WHERE quote_number = ?', [+quote_number]);
-  if (existing.rows[0]) {
-    req.flash('error', `Angebot Nr. ${quote_number} existiert bereits.`);
     return res.redirect('/angebote/neu');
   }
   const validItems = parseItems(item_name, item_qty, item_price);
@@ -56,11 +50,14 @@ router.post('/neu', w(async (req, res) => {
     return res.redirect('/angebote/neu');
   }
 
+  const lastRes = await db.execute('SELECT MAX(quote_number) as max FROM quotes');
+  const nextNumber = (Number(lastRes.rows[0].max) || 0) + 1;
+
   const qRes = await db.execute(
-    `INSERT INTO quotes (quote_number, date, valid_until, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, cost_center)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [+quote_number, date, valid_until||'', delivery_from||'', delivery_to||'', +customer_id,
-     order_number||'', notes||'', delivery_contact||'', cost_center||'']
+    `INSERT INTO quotes (quote_number, date, valid_until, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, cost_center, subject)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [nextNumber, date, valid_until||'', delivery_from||'', delivery_to||'', +customer_id,
+     order_number||'', notes||'', delivery_contact||'', cost_center||'', subject||'']
   );
   const quoteId = Number(qRes.lastInsertRowid);
 
@@ -71,7 +68,7 @@ router.post('/neu', w(async (req, res) => {
       [quoteId, it.name, it.qty, it.price, i]
     );
   }
-  req.flash('success', `Angebot Nr. ${quote_number} wurde erstellt.`);
+  req.flash('success', 'Angebot wurde erstellt.');
   res.redirect(`/angebote/${quoteId}`);
 }));
 
@@ -123,16 +120,16 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
   ]);
   res.render('angebote/new', {
     title: 'Angebot bearbeiten', customers: custRes.rows, articles: artRes.rows,
-    nextNumber: quote.quote_number, today: quote.date,
-    validUntil: quote.valid_until || '',
+    today: quote.date, validUntil: quote.valid_until || '',
     editQuote: quote, editItems: itemsRes.rows,
     customerPricesMap: buildPricesMap(pricesRes.rows)
   });
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
-  const { quote_number, date, valid_until, delivery_from, delivery_to, customer_id,
-          order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price } = req.body;
+  const { date, valid_until, delivery_from, delivery_to, customer_id,
+          order_number, notes, delivery_contact, cost_center, subject,
+          item_name, item_qty, item_price } = req.body;
 
   const validItems = parseItems(item_name, item_qty, item_price);
   if (!validItems.length) {
@@ -140,10 +137,10 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
     return res.redirect(`/angebote/${req.params.id}/bearbeiten`);
   }
   await db.execute(
-    `UPDATE quotes SET quote_number=?, date=?, valid_until=?, delivery_from=?, delivery_to=?,
-     customer_id=?, order_number=?, notes=?, delivery_contact=?, cost_center=? WHERE id=?`,
-    [+quote_number, date, valid_until||'', delivery_from||'', delivery_to||'', +customer_id,
-     order_number||'', notes||'', delivery_contact||'', cost_center||'', +req.params.id]
+    `UPDATE quotes SET date=?, valid_until=?, delivery_from=?, delivery_to=?,
+     customer_id=?, order_number=?, notes=?, delivery_contact=?, cost_center=?, subject=? WHERE id=?`,
+    [date, valid_until||'', delivery_from||'', delivery_to||'', +customer_id,
+     order_number||'', notes||'', delivery_contact||'', cost_center||'', subject||'', +req.params.id]
   );
   await db.execute('DELETE FROM quote_items WHERE quote_id = ?', [+req.params.id]);
   for (let i = 0; i < validItems.length; i++) {
@@ -153,7 +150,7 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
       [+req.params.id, it.name, it.qty, it.price, i]
     );
   }
-  req.flash('success', `Angebot Nr. ${quote_number} aktualisiert.`);
+  req.flash('success', 'Angebot aktualisiert.');
   res.redirect(`/angebote/${req.params.id}`);
 }));
 
