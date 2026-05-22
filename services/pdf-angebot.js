@@ -71,10 +71,10 @@ function generateAngebotPDF(quote, items, stream) {
   doc.fillColor(C.gold).font('Helvetica').fontSize(8)
      .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
 
-  doc.fillColor(C.gray).font('Helvetica').fontSize(8)
+  doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(26)
      .text('ANGEBOT', mL, y, { width: cW, align: 'right', lineBreak: false });
-  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(22)
-     .text(`Nr. ${quote.quote_number}`, mL, y + 14, { width: cW, align: 'right', lineBreak: false });
+  doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(14)
+     .text(`Nr. ${quote.quote_number}`, mL, y + 32, { width: cW, align: 'right', lineBreak: false });
 
   y += 50;
   doc.rect(mL, y, cW, 1.5).fill(C.gold);
