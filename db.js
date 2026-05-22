@@ -149,6 +149,36 @@ async function initDB() {
   // Migration: Abrechnungsmonat für Einkaufsrechnungen (YYYY-MM, optional)
   await db.execute("ALTER TABLE purchase_invoices ADD COLUMN billing_month TEXT DEFAULT ''").catch(() => {});
 
+  // Migration: Angebote (Quotes)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS quotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_number INTEGER NOT NULL UNIQUE,
+      date TEXT NOT NULL,
+      valid_until TEXT DEFAULT '',
+      delivery_from TEXT DEFAULT '',
+      delivery_to TEXT DEFAULT '',
+      customer_id INTEGER REFERENCES customers(id),
+      order_number TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      delivery_contact TEXT DEFAULT '',
+      cost_center TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `).catch(() => {});
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS quote_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+      article_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      sort_order INTEGER DEFAULT 0
+    )
+  `).catch(() => {});
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id)").catch(() => {});
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_quotes_date ON quotes(date DESC)").catch(() => {});
+
   // Indexes for JOIN and ORDER BY performance
   await db.executeMultiple(`
     CREATE INDEX IF NOT EXISTS idx_purchase_items_invoice_id   ON purchase_items(purchase_invoice_id);

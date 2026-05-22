@@ -1,0 +1,155 @@
+<div class="page-header">
+  <h2><%= editQuote ? 'Angebot bearbeiten' : 'Neues Angebot' %></h2>
+  <a href="/angebote" class="btn-secondary">← Zurück</a>
+</div>
+
+<form action="<%= editQuote ? '/angebote/' + editQuote.id + '/bearbeiten' : '/angebote/neu' %>" method="POST" id="invoice-form">
+
+  <!-- META -->
+  <div class="card">
+    <h3 class="card-title">Angebotsdaten</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Angebot Nr. <span class="required">*</span></label>
+        <input type="number" name="quote_number" value="<%= editQuote ? editQuote.quote_number : nextNumber %>" required min="1" />
+      </div>
+      <div class="form-group">
+        <label>Datum <span class="required">*</span></label>
+        <input type="date" name="date" value="<%= editQuote ? editQuote.date.split('T')[0] : today %>" required />
+      </div>
+      <div class="form-group">
+        <label>Gültig bis</label>
+        <input type="date" name="valid_until" value="<%= editQuote ? (editQuote.valid_until || '') : validUntil %>" />
+      </div>
+      <div class="form-group" style="grid-column: 1 / -1">
+        <label>Lieferdatum</label>
+        <div class="delivery-toggle">
+          <% const hasRange = editQuote && editQuote.delivery_to; %>
+          <label class="toggle-option">
+            <input type="radio" name="delivery_type" value="day" <%= !hasRange ? 'checked' : '' %> onchange="toggleDelivery(this.value)" />
+            Einzelner Tag
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="delivery_type" value="range" <%= hasRange ? 'checked' : '' %> onchange="toggleDelivery(this.value)" />
+            Zeitraum
+          </label>
+        </div>
+        <div class="delivery-fields">
+          <div id="delivery-day" style="display:<%= !hasRange ? 'block' : 'none' %>">
+            <input type="date" id="delivery_single" value="<%= editQuote && editQuote.delivery_from && !hasRange ? editQuote.delivery_from.split('T')[0] : '' %>" />
+          </div>
+          <div id="delivery-range" style="display:<%= hasRange ? 'flex' : 'none' %>; gap:8px; align-items:center; flex-wrap:wrap">
+            <input type="date" id="delivery_range_from" value="<%= editQuote && editQuote.delivery_from && hasRange ? editQuote.delivery_from.split('T')[0] : '' %>" style="flex:1;min-width:140px" />
+            <span style="color:var(--mid);font-size:0.9rem">bis</span>
+            <input type="date" id="delivery_range_to" value="<%= editQuote && editQuote.delivery_to ? editQuote.delivery_to.split('T')[0] : '' %>" style="flex:1;min-width:140px" />
+          </div>
+        </div>
+        <input type="hidden" name="delivery_from" id="hidden_delivery_from" value="<%= editQuote && editQuote.delivery_from ? editQuote.delivery_from.split('T')[0] : '' %>" />
+        <input type="hidden" name="delivery_to"   id="hidden_delivery_to"   value="<%= editQuote && editQuote.delivery_to   ? editQuote.delivery_to.split('T')[0]   : '' %>" />
+      </div>
+      <div class="form-group">
+        <label>Bestellnummer</label>
+        <input type="text" name="order_number" value="<%= editQuote ? editQuote.order_number : '' %>" placeholder="z.B. 4500045353" />
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOMER -->
+  <div class="card">
+    <h3 class="card-title">Kunde <span class="required">*</span></h3>
+    <div class="form-group" style="max-width:380px">
+      <label>Kunde auswählen</label>
+      <select name="customer_id" id="customer-select" required>
+        <option value="">— Bitte wählen —</option>
+        <% customers.forEach(c => { %>
+          <option value="<%= c.id %>"
+            data-billing="<%= c.billing_street %>, <%= c.billing_zip %> <%= c.billing_city %>"
+            data-delivery="<%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
+            data-costcenter="<%= c.cost_center %>"
+            <%= (editQuote && editQuote.customer_id == c.id) ? 'selected' : '' %>>
+            <%= c.name %>
+          </option>
+        <% }) %>
+      </select>
+    </div>
+    <div id="customer-preview" class="customer-preview" style="display:none">
+      <div><strong>Rechnungsadresse:</strong> <span id="preview-billing"></span></div>
+      <div><strong>Lieferadresse:</strong> <span id="preview-delivery"></span></div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
+      <div class="form-group" style="max-width:320px;flex:1">
+        <label>Ansprechpartner <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+        <input type="text" name="delivery_contact"
+               value="<%= editQuote ? editQuote.delivery_contact : '' %>"
+               placeholder="z.B. Charlotte Wieland" />
+      </div>
+      <div class="form-group" style="max-width:320px;flex:1">
+        <label>Kostenstelle <span style="color:var(--mid);font-weight:400">(optional)</span></label>
+        <input type="text" name="cost_center" id="cost-center-input"
+               value="<%= editQuote ? editQuote.cost_center : '' %>"
+               placeholder="z.B. GS Berlin 1010102002" />
+      </div>
+    </div>
+    <a href="/kunden/neu" target="_blank" class="link" style="font-size:0.85rem">+ Neuen Kunden anlegen</a>
+  </div>
+
+  <!-- ITEMS -->
+  <div class="card">
+    <h3 class="card-title">Artikel</h3>
+    <div id="items-container">
+      <div class="items-header">
+        <span>Artikel</span><span>Menge</span><span>Einzelpreis (netto)</span><span>Gesamt</span><span></span>
+      </div>
+    </div>
+    <button type="button" id="add-row" class="btn-ghost" style="margin-top:12px">+ Artikel hinzufügen</button>
+    <div class="totals-preview">
+      <div class="totals-row"><span>Gesamtbetrag netto</span><span id="total-netto">0,00 €</span></div>
+      <div class="totals-row"><span>+ 7% USt</span><span id="total-ust">0,00 €</span></div>
+      <div class="totals-row totals-final"><span>Gesamtbetrag brutto</span><span id="total-brutto">0,00 €</span></div>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="card">
+    <h3 class="card-title">Notizen (intern)</h3>
+    <textarea name="notes" rows="3" placeholder="Interne Notiz, wird nicht auf dem Angebot angezeigt …"><%= editQuote ? editQuote.notes : '' %></textarea>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:40px">
+    <button type="submit" class="btn-primary btn-lg">
+      <%= editQuote ? 'Änderungen speichern' : 'Angebot erstellen' %>
+    </button>
+    <a href="/angebote" class="btn-secondary btn-lg">Abbrechen</a>
+  </div>
+</form>
+
+<script>
+const ARTICLES = <%- JSON.stringify(articles.map(a => ({ id: a.id, name: a.name, price: a.unit_price }))) %>;
+const SEED_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
+const CUSTOMER_PRICES = <%- JSON.stringify(customerPricesMap || {}) %>;
+
+function toggleDelivery(type) {
+  document.getElementById('delivery-day').style.display   = type === 'day'   ? 'block' : 'none';
+  document.getElementById('delivery-range').style.display = type === 'range' ? 'flex'  : 'none';
+  syncDeliveryFields();
+}
+
+function syncDeliveryFields() {
+  const type = document.querySelector('input[name="delivery_type"]:checked')?.value;
+  const hFrom = document.getElementById('hidden_delivery_from');
+  const hTo   = document.getElementById('hidden_delivery_to');
+  if (type === 'day') {
+    hFrom.value = document.getElementById('delivery_single').value;
+    hTo.value   = '';
+  } else {
+    hFrom.value = document.getElementById('delivery_range_from').value;
+    hTo.value   = document.getElementById('delivery_range_to').value;
+  }
+}
+
+document.getElementById('invoice-form').addEventListener('submit', syncDeliveryFields);
+['delivery_single','delivery_range_from','delivery_range_to'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', syncDeliveryFields);
+});
+</script>

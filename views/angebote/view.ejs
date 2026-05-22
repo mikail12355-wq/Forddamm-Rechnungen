@@ -1,0 +1,126 @@
+<div class="page-header">
+  <h2>Angebot Nr. <%= quote.quote_number %></h2>
+  <div class="page-header-actions">
+    <a href="/angebote/<%= quote.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
+    <a href="/angebote/<%= quote.id %>/bearbeiten" class="btn-secondary">Bearbeiten</a>
+    <a href="/angebote" class="btn-ghost">← Zurück</a>
+  </div>
+</div>
+
+<div class="invoice-preview">
+  <!-- Header -->
+  <div class="inv-header">
+    <div></div>
+    <div class="inv-company">
+      <div class="inv-company-name">Bäckerei Forddamm</div>
+      <div>Murat Öztürk</div>
+      <div>Forddamm 13</div>
+      <div>12107 Berlin</div>
+    </div>
+  </div>
+
+  <!-- Addresses -->
+  <div class="inv-addresses">
+    <div>
+      <div class="inv-label">Rechnungsadresse:</div>
+      <div>An</div>
+      <div><strong><%= quote.customer_name %></strong></div>
+      <% if (quote.billing_street) { %><div><%= quote.billing_street %></div><% } %>
+      <% if (quote.billing_zip || quote.billing_city) { %><div><%= quote.billing_zip %> <%= quote.billing_city %></div><% } %>
+    </div>
+    <div>
+      <div class="inv-label">Lieferadresse:</div>
+      <div>An</div>
+      <div><strong><%= quote.customer_name %></strong></div>
+      <% if (quote.delivery_contact) { %><div><%= quote.delivery_contact %></div><% } %>
+      <% if (quote.delivery_street) { %><div><%= quote.delivery_street %></div><% } %>
+      <% if (quote.delivery_zip || quote.delivery_city) { %><div><%= quote.delivery_zip %> <%= quote.delivery_city %></div><% } %>
+    </div>
+    <div>
+      <% if (quote.order_number) { %>
+        <div class="inv-label">Bestellung: <%= quote.order_number %></div>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (quote.cost_center) { %>
+  <div class="inv-costcenter">KostenstelleNr.<%= quote.cost_center %></div>
+  <% } %>
+
+  <!-- Meta -->
+  <div class="inv-meta">
+    <div>
+      <span class="inv-label">Lieferdatum:</span>
+      <% if (quote.delivery_from) { %>
+        <span><%= new Date(quote.delivery_from).toLocaleDateString('de-DE') %></span>
+        <% if (quote.delivery_to) { %>–<span><%= new Date(quote.delivery_to).toLocaleDateString('de-DE') %></span><% } %>
+      <% } %>
+    </div>
+    <div>
+      <span class="inv-label">Angebot Nr.</span> <strong><%= quote.quote_number %></strong>
+      &nbsp;&nbsp;&nbsp;
+      <span class="inv-label">Datum:</span> <span><%= new Date(quote.date).toLocaleDateString('de-DE') %></span>
+      <% if (quote.valid_until) { %>
+        &nbsp;&nbsp;&nbsp;
+        <span class="inv-label">Gültig bis:</span>
+        <% const today = new Date().toISOString().split('T')[0]; %>
+        <span style="<%= quote.valid_until < today ? 'color:#b91c1c;font-weight:600' : '' %>">
+          <%= new Date(quote.valid_until).toLocaleDateString('de-DE') %>
+        </span>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>Artikel</th>
+        <th style="text-align:center">Menge</th>
+        <th style="text-align:right">Einzelpreis, netto</th>
+        <th style="text-align:right">Gesamtpreis, netto</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% items.forEach(item => { %>
+      <tr>
+        <td><%= item.article_name %></td>
+        <td style="text-align:center"><%= item.quantity %></td>
+        <td style="text-align:right"><%= item.unit_price.toFixed(2).replace('.',',') %> €</td>
+        <td style="text-align:right"><%= (item.quantity * item.unit_price).toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <% }) %>
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3">Gesamtbetrag, netto</td>
+        <td style="text-align:right"><%= totalNetto.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="3">+ 7% USt</td>
+        <td style="text-align:right"><%= ust.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+      <tr class="total-row total-final">
+        <td colspan="3">Gesamtbetrag, brutto</td>
+        <td style="text-align:right"><%= totalBrutto.toFixed(2).replace('.',',') %> €</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="inv-payment">
+    <p style="color:#6b4c2a;font-style:italic">Dieses Angebot ist freibleibend und unverbindlich.</p>
+  </div>
+
+  <div class="inv-footer">SteuerNr.20/460/01995</div>
+</div>
+
+<div class="page-header-actions" style="margin-top:16px;padding-bottom:40px">
+  <a href="/angebote/<%= quote.id %>/pdf" class="btn-primary">⬇ PDF herunterladen</a>
+  <form action="/angebote/<%= quote.id %>/zu-rechnung" method="POST" style="display:inline"
+        onsubmit="return confirm('Angebot in eine Rechnung umwandeln?')">
+    <button type="submit" class="btn-secondary">→ Zu Rechnung umwandeln</button>
+  </form>
+  <form action="/angebote/<%= quote.id %>/loeschen" method="POST" onsubmit="return confirm('Angebot wirklich löschen?')">
+    <button type="submit" class="btn-danger">Angebot löschen</button>
+  </form>
+</div>

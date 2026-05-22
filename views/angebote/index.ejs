@@ -1,0 +1,118 @@
+<div class="page-header">
+  <h2>Angebote</h2>
+  <a href="/angebote/neu" class="btn-primary">+ Neues Angebot</a>
+</div>
+
+<div class="filter-bar">
+  <%
+    const qs = (overrides) => {
+      const p = { search, sort, year, period, ...overrides };
+      return Object.entries(p).filter(([,v]) => v && v !== 'all' && v !== '').map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+    };
+  %>
+
+  <form class="filter-group" method="GET" action="/angebote" style="gap:8px">
+    <input type="hidden" name="year"   value="<%= year %>" />
+    <input type="hidden" name="period" value="<%= period %>" />
+    <input type="text" name="search" placeholder="Nr., Kunde, Bestellnr. …" value="<%= search %>" style="flex:1;min-width:180px" />
+    <select name="sort" onchange="this.form.submit()" style="width:auto">
+      <option value="desc" <%= sort==='desc'?'selected':'' %>>Neueste zuerst</option>
+      <option value="asc"  <%= sort==='asc'?'selected':'' %>>Älteste zuerst</option>
+    </select>
+    <button type="submit" class="btn-secondary">Suchen</button>
+    <% if (search) { %><a href="/angebote?<%= qs({search:''}) %>" class="btn-ghost">✕</a><% } %>
+  </form>
+
+  <div class="filter-group">
+    <span class="filter-label">Jahr</span>
+    <div class="filter-months">
+      <a href="/angebote?<%= qs({year:'all',period:'all'}) %>" class="filter-pill <%= year==='all' ? 'active' : '' %>">Alle</a>
+      <% years.forEach(y => { %>
+        <a href="/angebote?<%= qs({year:y}) %>" class="filter-pill <%= year===y ? 'active' : '' %>"><%= y %></a>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <span class="filter-label">Quartal</span>
+    <div class="filter-months">
+      <a href="/angebote?<%= qs({period:'all'}) %>" class="filter-pill <%= period==='all' ? 'active' : '' %>">Alle</a>
+      <% [['Q1','Jan–Mär'],['Q2','Apr–Jun'],['Q3','Jul–Sep'],['Q4','Okt–Dez']].forEach(([q,label]) => { %>
+        <a href="/angebote?<%= qs({period:q}) %>" class="filter-pill <%= period===q ? 'active' : '' %>"><%= q %> <span style="font-weight:400;opacity:0.75"><%= label %></span></a>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <span class="filter-label">Monat</span>
+    <div class="filter-months">
+      <% ['01','02','03','04','05','06','07','08','09','10','11','12'].forEach((m,i) => {
+         const names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+      %>
+        <a href="/angebote?<%= qs({period:m}) %>" class="filter-pill <%= period===m ? 'active' : '' %>"><%= names[i] %></a>
+      <% }) %>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <% if (quotes.length === 0) { %>
+    <p class="empty-state">Keine Angebote gefunden.</p>
+  <% } else { %>
+  <%
+    const totalNetto  = quotes.reduce((s, q) => s + (q.total_netto || 0), 0);
+    const totalBrutto = totalNetto * 1.07;
+  %>
+  <div class="invoices-summary">
+    <span><strong><%= quotes.length %></strong> Angebot<%= quotes.length !== 1 ? 'e' : '' %></span>
+    <span>Netto gesamt: <strong><%= totalNetto.toFixed(2).replace('.',',') %> €</strong></span>
+    <span>Brutto gesamt: <strong><%= totalBrutto.toFixed(2).replace('.',',') %> €</strong></span>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Nr.</th>
+        <th>Datum</th>
+        <th>Gültig bis</th>
+        <th>Kunde</th>
+        <th>Bestellnr.</th>
+        <th>Netto</th>
+        <th>Brutto</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% quotes.forEach(q => {
+        const netto = q.total_netto || 0;
+        const brutto = netto * 1.07;
+        const today = new Date().toISOString().split('T')[0];
+        const expired = q.valid_until && q.valid_until < today;
+      %>
+      <tr>
+        <td><strong>#<%= q.quote_number %></strong></td>
+        <td><%= new Date(q.date).toLocaleDateString('de-DE') %></td>
+        <td>
+          <% if (q.valid_until) { %>
+            <span style="<%= expired ? 'color:#b91c1c;font-weight:600' : '' %>">
+              <%= new Date(q.valid_until).toLocaleDateString('de-DE') %>
+              <% if (expired) { %> <span class="badge badge-orange" style="font-size:0.7rem">Abgelaufen</span><% } %>
+            </span>
+          <% } else { %>—<% } %>
+        </td>
+        <td><%= q.customer_name || '—' %></td>
+        <td class="text-muted"><%= q.order_number || '—' %></td>
+        <td><%= netto.toFixed(2).replace('.',',') %> €</td>
+        <td><strong><%= brutto.toFixed(2).replace('.',',') %> €</strong></td>
+        <td>
+          <div class="action-links">
+            <a href="/angebote/<%= q.id %>">Ansehen</a>
+            <a href="/angebote/<%= q.id %>/pdf">PDF</a>
+            <a href="/angebote/<%= q.id %>/bearbeiten">Bearbeiten</a>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } %>
+</div>
