@@ -170,7 +170,7 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     [String(yearNum), String(monthNum).padStart(2, '0')]
   );
   const allEntries  = rows.rows;
-  const lottoRows   = allEntries.filter(e => Number(e.lotto_revenue) > 0);
+  const lottoRows   = allEntries.filter(e => Number(e.lotto_revenue) !== 0);
   const dayMap      = {};
   lottoRows.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
   const totalLotto  = lottoRows.reduce((s, e) => s + Number(e.lotto_revenue), 0);
@@ -205,12 +205,18 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     const date  = new Date(yearNum, monthNum - 1, day);
     const label = `${KB_DAYS_DE[date.getDay()]}  ${String(day).padStart(2, '0')}.`;
 
-    if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
+    const isAusz = lotto < 0;
+    if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(isAusz ? '#f0fff4' : KB_C.rowAlt);
     doc.fillColor(KB_C.dark).font('Helvetica').fontSize(9)
        .text(label, mL + 6, y + 7, { lineBreak: false });
-    if (e.notes) doc.text(e.notes, colBem, y + 7, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
-    doc.font('Helvetica-Bold')
-       .text(lotto.toFixed(2).replace('.', ',') + ' €', mL, y + 7, { width: cW - 6, align: 'right', lineBreak: false });
+    const bemText = isAusz ? 'Gewinnausschüttung' + (e.notes ? ` (${e.notes})` : '') : (e.notes || '');
+    if (bemText) doc.fillColor(isAusz ? '#27ae60' : KB_C.dark)
+       .text(bemText, colBem, y + 7, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
+    const lottoLabel = isAusz
+      ? '− ' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
+      : lotto.toFixed(2).replace('.', ',') + ' €';
+    doc.fillColor(isAusz ? '#27ae60' : KB_C.dark).font('Helvetica-Bold')
+       .text(lottoLabel, mL, y + 7, { width: cW - 6, align: 'right', lineBreak: false });
     y += ROW_H;
     idx++;
   }
@@ -218,14 +224,21 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   // Abschlusslinie + Gesamtsumme
   doc.rect(mL, y, cW, 1).fill(KB_C.border);
   y += 18;
-  doc.rect(mL, y - 2, 3, 28).fill(KB_C.gold);
+  const accentColor = totalLotto >= 0 ? KB_C.gold : '#27ae60';
+  doc.rect(mL, y - 2, 3, 28).fill(accentColor);
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(9)
-     .text('GESAMTUMSATZ LOTTO', mL + 10, y + 4, { lineBreak: false });
-  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(16)
-     .text(totalLotto.toFixed(2).replace('.', ',') + ' €', mL, y, { width: cW - 6, align: 'right', lineBreak: false });
+     .text('ZU ÜBERWEISENDER BETRAG', mL + 10, y + 4, { lineBreak: false });
+  const totalLabel = totalLotto >= 0
+    ? totalLotto.toFixed(2).replace('.', ',') + ' €'
+    : '− ' + Math.abs(totalLotto).toFixed(2).replace('.', ',') + ' € (Guthaben)';
+  doc.fillColor(totalLotto >= 0 ? KB_C.dark : '#27ae60').font('Helvetica-Bold').fontSize(16)
+     .text(totalLabel, mL, y, { width: cW - 6, align: 'right', lineBreak: false });
   y += 34;
+  const einnahmen  = lottoRows.filter(e => Number(e.lotto_revenue) > 0).reduce((s, e) => s + Number(e.lotto_revenue), 0);
+  const auszahlung = lottoRows.filter(e => Number(e.lotto_revenue) < 0).reduce((s, e) => s + Number(e.lotto_revenue), 0);
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
-     .text(`${lottoRows.length} Einträge · ${monthName} ${yearNum}`, mL + 10, y, { lineBreak: false });
+     .text(`Einnahmen: ${einnahmen.toFixed(2).replace('.', ',')} €   ·   Gewinnausschüttungen: ${Math.abs(auszahlung).toFixed(2).replace('.', ',')} €   ·   ${lottoRows.length} Einträge · ${monthName} ${yearNum}`,
+           mL + 10, y, { lineBreak: false });
 
   kbFooter(doc);
   doc.end();
