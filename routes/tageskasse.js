@@ -241,17 +241,6 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
      .text(totalLabel, mL, y, { width: cW - 6, align: 'right', lineBreak: false });
   y += 30;
 
-  // Aufschlüsselung
-  const einnahmen  = lottoRows.filter(e => Number(e.lotto_revenue) > 0).reduce((s, e) => s + Number(e.lotto_revenue), 0);
-  const auszahlung = lottoRows.filter(e => Number(e.lotto_revenue) < 0).reduce((s, e) => s + Number(e.lotto_revenue), 0);
-  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
-     .text(
-       `Einnahmen: ${einnahmen.toFixed(2).replace('.', ',')} €` +
-       (auszahlung < 0 ? `   ·   Auszahlungen: ${Math.abs(auszahlung).toFixed(2).replace('.', ',')} €` : '') +
-       `   ·   ${lottoRows.length} Einträge · ${monthName} ${yearNum}`,
-       mL + 10, y, { lineBreak: false }
-     );
-
   kbFooter(doc);
   doc.end();
 }));
