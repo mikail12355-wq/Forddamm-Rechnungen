@@ -184,40 +184,43 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="Kassenbericht_${monthName}_${yearNum}_Lotto.pdf"`);
   doc.pipe(res);
 
-  const mL  = KB_ML, cW = KB_CW;
-  const ROW_H  = 16;
+  const mL      = KB_ML, cW = KB_CW;
+  const colWday = mL + 88;  // Wochentag-Spalte
+  const ROW_H   = 16;
 
   let y = kbHeader(doc, 'LOTTO', `${monthName} ${yearNum}`);
 
   // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5);
-  doc.text('TAG',    mL + 6, y + 6, { lineBreak: false });
-  doc.text('UMSATZ', mL,     y + 6, { width: cW - 6, align: 'right', lineBreak: false });
+  doc.text('DATUM',     mL + 6,  y + 6, { lineBreak: false });
+  doc.text('WOCHENTAG', colWday, y + 6, { lineBreak: false });
+  doc.text('UMSATZ',    mL,      y + 6, { width: cW - 6, align: 'right', lineBreak: false });
   y += 20;
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
 
-  // Tageszeilen — nur Tage mit Lotto-Eintrag
+  // Tageszeilen
   let idx = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const e = dayMap[day];
     if (!e) continue;
-    const lotto  = Number(e.lotto_revenue);
-    const isAusz = lotto < 0;
-    const date   = new Date(yearNum, monthNum - 1, day);
-    const label  = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}, ${KB_DAYS_FULL[date.getDay()]}`;
+    const lotto   = Number(e.lotto_revenue);
+    const isAusz  = lotto < 0;
+    const date    = new Date(yearNum, monthNum - 1, day);
+    const dateStr = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}`;
+    const wday    = KB_DAYS_FULL[date.getDay()];
 
     if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
     doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
-       .text(label, mL + 6, y + 4, { lineBreak: false });
-    if (lotto !== 0) {
-      const lottoLabel = isAusz
-        ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
-        : lotto.toFixed(2).replace('.', ',') + ' €';
-      doc.fillColor(KB_C.dark).font('Helvetica-Bold')
-         .text(lottoLabel, mL, y + 4, { width: cW - 6, align: 'right', lineBreak: false });
-    }
+       .text(dateStr, mL + 6,  y + 4, { lineBreak: false });
+    doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
+       .text(wday,    colWday, y + 4, { lineBreak: false });
+    const lottoLabel = isAusz
+      ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
+      : lotto.toFixed(2).replace('.', ',') + ' €';
+    doc.fillColor(KB_C.dark).font('Helvetica-Bold')
+       .text(lottoLabel, mL, y + 4, { width: cW - 6, align: 'right', lineBreak: false });
     y += ROW_H;
     idx++;
   }
@@ -281,10 +284,11 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="Kassenbericht_${monthName}_${yearNum}_Laden.pdf"`);
   doc.pipe(res);
 
-  const mL  = KB_ML, cW = KB_CW;
-  // Spalten: Tag | 7% brutto | 19% brutto | Gesamt
-  const col7RE  = mL + 330;  // rechter Rand 7%-Spalte
-  const col19RE = mL + 420;  // rechter Rand 19%-Spalte
+  const mL      = KB_ML, cW = KB_CW;
+  // Spalten: Datum | Wochentag | 7% brutto | 19% brutto | Gesamt
+  const colWday = mL + 82;   // Wochentag-Spalte
+  const col7RE  = mL + 320;  // rechter Rand 7%-Spalte
+  const col19RE = mL + 415;  // rechter Rand 19%-Spalte
   const ROW_H   = 15;
   const EUR     = n => Number(n).toFixed(2).replace('.', ',') + ' €';
 
@@ -293,10 +297,11 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7);
-  doc.text('TAG',         mL + 6, y + 6, { lineBreak: false });
-  doc.text('7 % BRUTTO',  mL,     y + 6, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
-  doc.text('19 % BRUTTO', mL,     y + 6, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
-  doc.text('GESAMT',      mL,     y + 6, { width: cW - 6,           align: 'right', lineBreak: false });
+  doc.text('DATUM',       mL + 6,  y + 6, { lineBreak: false });
+  doc.text('WOCHENTAG',   colWday, y + 6, { lineBreak: false });
+  doc.text('7 % BRUTTO',  mL,      y + 6, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
+  doc.text('19 % BRUTTO', mL,      y + 6, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
+  doc.text('GESAMT',      mL,      y + 6, { width: cW - 6,           align: 'right', lineBreak: false });
   y += 20;
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
@@ -306,15 +311,18 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   for (let day = 1; day <= daysInMonth; day++) {
     const e = dayMap[day];
     if (!e) continue;
-    const r7   = Number(e.revenue_7);
-    const r19  = Number(e.revenue_19);
-    const ges  = r7 + r19;
-    const date  = new Date(yearNum, monthNum - 1, day);
-    const label = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}, ${KB_DAYS_FULL[date.getDay()]}`;
+    const r7      = Number(e.revenue_7);
+    const r19     = Number(e.revenue_19);
+    const ges     = r7 + r19;
+    const date    = new Date(yearNum, monthNum - 1, day);
+    const dateStr = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}`;
+    const wday    = KB_DAYS_FULL[date.getDay()];
 
     if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
     doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
-       .text(label, mL + 6, y + 3, { lineBreak: false });
+       .text(dateStr, mL + 6,  y + 3, { lineBreak: false });
+    doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
+       .text(wday,    colWday, y + 3, { lineBreak: false });
     if (r7  > 0) doc.text(EUR(r7),  mL, y + 3, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
     if (r19 > 0) doc.text(EUR(r19), mL, y + 3, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
     doc.font('Helvetica-Bold')
