@@ -104,6 +104,54 @@ router.post('/:id/loeschen', w(async (req, res) => {
   res.redirect('/tageskasse');
 }));
 
+// ─── Farben & Hilfsfunktionen (Kassenbericht) ────────────────────────────────
+const KB_C = {
+  dark:   '#2b1e0f',
+  gold:   '#c8913a',
+  mid:    '#6b4c2a',
+  border: '#d4b896',
+  gray:   '#9a8070',
+  rowAlt: '#f9f5ef',
+  bg:     '#f6f0e8',
+};
+const KB_W = 595.28, KB_H = 841.89;
+const KB_ML = 52, KB_MR = 52;
+const KB_CW = KB_W - KB_ML - KB_MR;
+const KB_DAYS_DE = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'];
+
+function kbHeader(doc, title, subtitle) {
+  const mL = KB_ML, cW = KB_CW;
+  let y = 44;
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(18)
+     .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
+  doc.fillColor(KB_C.gold).font('Helvetica').fontSize(8)
+     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('KASSENBERICHT', mL, y, { width: cW, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(22)
+     .text(title, mL, y + 14, { width: cW, align: 'right', lineBreak: false });
+  y += 52;
+  doc.rect(mL, y, cW, 1.5).fill(KB_C.gold);
+  y += 16;
+  doc.fillColor(KB_C.gold).font('Helvetica').fontSize(7.5)
+     .text('BERICHTSZEITRAUM', mL, y, { lineBreak: false });
+  y += 12;
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(13)
+     .text(subtitle, mL, y, { lineBreak: false });
+  y += 32;
+  return y;
+}
+
+function kbFooter(doc) {
+  const mL = KB_ML, cW = KB_CW, H = KB_H;
+  doc.rect(mL, H - 40, cW, 1).fill(KB_C.border);
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
+     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
+     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin',
+           mL, H - 26, { width: cW, align: 'right', lineBreak: false });
+}
+
 // ─── KASSENBERICHT LOTTO (PDF) ───────────────────────────────────────────────
 router.get('/kassenbericht-lotto', w(async (req, res) => {
   const { year, month } = req.query;
@@ -112,77 +160,74 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     return res.redirect('/tageskasse');
   }
 
-  const monthNum    = parseInt(month);
-  const yearNum     = parseInt(year);
+  const monthNum  = parseInt(month);
+  const yearNum   = parseInt(year);
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
-  const monthName   = MONTHS[monthNum - 1];
+  const monthName = MONTHS[monthNum - 1];
 
   const rows = await db.execute(
     "SELECT * FROM daily_cash WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date ASC",
     [String(yearNum), String(monthNum).padStart(2, '0')]
   );
-  const entries = rows.rows;
-  const dayMap  = {};
-  entries.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
-  const totalLotto = entries.reduce((s, e) => s + Number(e.lotto_revenue), 0);
+  const allEntries  = rows.rows;
+  const lottoRows   = allEntries.filter(e => Number(e.lotto_revenue) > 0);
+  const dayMap      = {};
+  lottoRows.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
+  const totalLotto  = lottoRows.reduce((s, e) => s + Number(e.lotto_revenue), 0);
 
   const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Kassenbericht ${monthName} ${yearNum} Lotto` } });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="Kassenbericht_${monthName}_${yearNum}_Lotto.pdf"`);
   doc.pipe(res);
 
-  const W = 595.28, H = 841.89;
-  const mL = 60, mR = 60;
-  const cW = W - mL - mR;
+  const mL = KB_ML, cW = KB_CW;
+  const colBem = mL + 80;
+  const ROW_H  = 22;
 
-  const colTag = mL;
-  const colBem = mL + 55;
-
-  let y = 50;
-
-  // Header
-  doc.fillColor('#000').font('Helvetica-Bold').fontSize(20)
-     .text(`Kassenbericht Monat:  ${monthName} ${yearNum}  Lotto`, mL, y);
-  y += 40;
+  let y = kbHeader(doc, 'LOTTO', `${monthName} ${yearNum}`);
 
   // Tabellenkopf
-  doc.fontSize(10).font('Helvetica-Bold');
-  doc.text('Tag',       colTag, y, { lineBreak: false });
-  doc.text('Bemerkung', colBem, y, { lineBreak: false });
-  doc.text('Umsatz',    mL, y, { width: cW, align: 'right', lineBreak: false });
-  y += 6;
-  doc.rect(mL, y, cW, 0.8).fill('#000');
-  y += 10;
+  doc.rect(mL, y, cW, 26).fill(KB_C.bg);
+  doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5);
+  doc.text('TAG',       mL + 6,  y + 9, { lineBreak: false });
+  doc.text('BEMERKUNG', colBem,  y + 9, { lineBreak: false });
+  doc.text('UMSATZ',    mL, y + 9, { width: cW - 6, align: 'right', lineBreak: false });
+  y += 26;
+  doc.rect(mL, y, cW, 1).fill(KB_C.gold);
+  y += 1;
 
-  // Tageszeilen
-  doc.font('Helvetica').fontSize(10);
-  const ROW_H = 17;
+  // Tageszeilen — nur Tage mit Lotto-Eintrag
+  let idx = 0;
   for (let day = 1; day <= daysInMonth; day++) {
-    const e     = dayMap[day];
-    const lotto = e ? Number(e.lotto_revenue) : 0;
-    const notes = e ? (e.notes || '') : '';
+    const e = dayMap[day];
+    if (!e) continue;
+    const lotto = Number(e.lotto_revenue);
+    const date  = new Date(yearNum, monthNum - 1, day);
+    const label = `${KB_DAYS_DE[date.getDay()]}  ${String(day).padStart(2, '0')}.`;
 
-    doc.fillColor('#000');
-    doc.text(String(day), colTag, y, { lineBreak: false });
-    if (notes) doc.text(notes, colBem, y, { width: W - mR - colBem - 80, lineBreak: false });
-    if (lotto > 0) {
-      doc.text(lotto.toFixed(2).replace('.', ',') + ' €', mL, y, { width: cW, align: 'right', lineBreak: false });
-    }
+    if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
+    doc.fillColor(KB_C.dark).font('Helvetica').fontSize(9)
+       .text(label, mL + 6, y + 7, { lineBreak: false });
+    if (e.notes) doc.text(e.notes, colBem, y + 7, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
+    doc.font('Helvetica-Bold')
+       .text(lotto.toFixed(2).replace('.', ',') + ' €', mL, y + 7, { width: cW - 6, align: 'right', lineBreak: false });
     y += ROW_H;
+    idx++;
   }
 
-  // Summe
-  y += 6;
-  doc.rect(mL, y, cW, 0.8).fill('#000');
-  y += 10;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
-  doc.text('Summe:', colBem, y, { lineBreak: false });
-  doc.text(totalLotto.toFixed(2).replace('.', ',') + ' €', mL, y, { width: cW, align: 'right', lineBreak: false });
+  // Abschlusslinie + Gesamtsumme
+  doc.rect(mL, y, cW, 1).fill(KB_C.border);
+  y += 18;
+  doc.rect(mL, y - 2, 3, 28).fill(KB_C.gold);
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(9)
+     .text('GESAMTUMSATZ LOTTO', mL + 10, y + 4, { lineBreak: false });
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(16)
+     .text(totalLotto.toFixed(2).replace('.', ',') + ' €', mL, y, { width: cW - 6, align: 'right', lineBreak: false });
+  y += 34;
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text(`${lottoRows.length} Einträge · ${monthName} ${yearNum}`, mL + 10, y, { lineBreak: false });
 
-  // Fußzeile
-  doc.font('Helvetica').fontSize(8).fillColor('#666')
-     .text('Seite 1', mL, H - 30, { width: cW, align: 'center', lineBreak: false });
-
+  kbFooter(doc);
   doc.end();
 }));
 
@@ -194,124 +239,131 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
     return res.redirect('/tageskasse');
   }
 
-  const monthNum    = parseInt(month);
-  const yearNum     = parseInt(year);
+  const monthNum  = parseInt(month);
+  const yearNum   = parseInt(year);
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
-  const monthName   = MONTHS[monthNum - 1];
+  const monthName = MONTHS[monthNum - 1];
 
   const rows = await db.execute(
     "SELECT * FROM daily_cash WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date ASC",
     [String(yearNum), String(monthNum).padStart(2, '0')]
   );
-  const entries = rows.rows;
-  const dayMap  = {};
-  entries.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
-
-  const sumR7  = entries.reduce((s, e) => s + Number(e.revenue_7),  0);
-  const sumR19 = entries.reduce((s, e) => s + Number(e.revenue_19), 0);
+  const ladenRows = rows.rows.filter(e => Number(e.revenue_7) > 0 || Number(e.revenue_19) > 0);
+  const dayMap    = {};
+  ladenRows.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
+  const sumR7  = ladenRows.reduce((s, e) => s + Number(e.revenue_7),  0);
+  const sumR19 = ladenRows.reduce((s, e) => s + Number(e.revenue_19), 0);
 
   const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Kassenbericht ${monthName} ${yearNum} Laden` } });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="Kassenbericht_${monthName}_${yearNum}_Laden.pdf"`);
   doc.pipe(res);
 
-  const W = 595.28, H = 841.89;
-  const mL = 50, mR = 50;
-  const cW = W - mL - mR;
+  const mL  = KB_ML, cW = KB_CW;
+  // Spalten (rechts-ausgerichtet): Tag | Bemerkung | 7% | 19% | Gesamt
+  const colBem  = mL + 72;
+  const col7R   = mL + 295;   // rechter Rand der 7%-Spalte
+  const col19R  = mL + 395;   // rechter Rand der 19%-Spalte
+  const colGesR = mL + cW;    // rechter Rand Gesamt
+  const ROW_H   = 22;
+  const EUR     = n => Number(n).toFixed(2).replace('.', ',') + ' €';
 
-  // Spalten: Tag | Bemerkung | 7% brutto | 19% brutto | Gesamt
-  const colTag  = mL;
-  const colBem  = mL + 45;
-  const colR7   = mL + 245;
-  const colR19  = mL + 345;
-  const colGes  = mL + 445;
-  const ROW_H   = 17;
+  let y = kbHeader(doc, 'LADEN', `${monthName} ${yearNum}`);
 
-  let y = 50;
-
-  // Header
-  doc.fillColor('#000').font('Helvetica-Bold').fontSize(20)
-     .text(`Kassenbericht Monat:  ${monthName} ${yearNum}  Laden`, mL, y);
-  y += 10;
-  doc.font('Helvetica').fontSize(9).fillColor('#444')
-     .text('(ohne Lotto-Umsatz)', mL, y);
-  y += 30;
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('ohne Lotto-Umsatz', mL, y - 22, { lineBreak: false });
 
   // Tabellenkopf
-  doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
-  doc.text('Tag',        colTag, y, { lineBreak: false });
-  doc.text('Bemerkung',  colBem, y, { lineBreak: false, width: colR7 - colBem - 5 });
-  doc.text('7% brutto',  colR7,  y, { width: colR19 - colR7, align: 'right', lineBreak: false });
-  doc.text('19% brutto', colR19, y, { width: colGes - colR19, align: 'right', lineBreak: false });
-  doc.text('Gesamt',     colGes, y, { width: W - mR - colGes, align: 'right', lineBreak: false });
-  y += 6;
-  doc.rect(mL, y, cW, 0.8).fill('#000');
-  y += 10;
+  doc.rect(mL, y, cW, 26).fill(KB_C.bg);
+  doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5);
+  doc.text('TAG',        mL + 6,  y + 9, { lineBreak: false });
+  doc.text('BEMERKUNG',  colBem,  y + 9, { lineBreak: false });
+  doc.text('7 % BRUTTO', mL, y + 9, { width: col7R  - mL - 6, align: 'right', lineBreak: false });
+  doc.text('19 % BRUTTO',mL, y + 9, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+  doc.text('GESAMT',     mL, y + 9, { width: cW     - 6,      align: 'right', lineBreak: false });
+  y += 26;
+  doc.rect(mL, y, cW, 1).fill(KB_C.gold);
+  y += 1;
 
-  // Tageszeilen
-  doc.font('Helvetica').fontSize(9).fillColor('#000');
+  // Tageszeilen — nur Tage mit Laden-Umsatz
+  let idx = 0;
   for (let day = 1; day <= daysInMonth; day++) {
-    const e    = dayMap[day];
-    const r7   = e ? Number(e.revenue_7)  : 0;
-    const r19  = e ? Number(e.revenue_19) : 0;
-    const ges  = r7 + r19;
-    const notes = e ? (e.notes || '') : '';
+    const e = dayMap[day];
+    if (!e) continue;
+    const r7  = Number(e.revenue_7);
+    const r19 = Number(e.revenue_19);
+    const ges = r7 + r19;
+    const date  = new Date(yearNum, monthNum - 1, day);
+    const label = `${KB_DAYS_DE[date.getDay()]}  ${String(day).padStart(2, '0')}.`;
 
-    doc.text(String(day), colTag, y, { lineBreak: false });
-    if (notes) doc.text(notes, colBem, y, { width: colR7 - colBem - 5, lineBreak: false });
-    if (r7  > 0) doc.text(r7.toFixed(2).replace('.', ',')  + ' €', colR7,  y, { width: colR19 - colR7,        align: 'right', lineBreak: false });
-    if (r19 > 0) doc.text(r19.toFixed(2).replace('.', ',') + ' €', colR19, y, { width: colGes - colR19,       align: 'right', lineBreak: false });
-    if (ges > 0) doc.font('Helvetica-Bold').text(ges.toFixed(2).replace('.', ',') + ' €', colGes, y, { width: W - mR - colGes, align: 'right', lineBreak: false });
-    doc.font('Helvetica');
+    if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
+    doc.fillColor(KB_C.dark).font('Helvetica').fontSize(9)
+       .text(label, mL + 6, y + 7, { lineBreak: false });
+    if (e.notes) doc.text(e.notes, colBem, y + 7, { width: col7R - colBem - 50, lineBreak: false });
+    if (r7  > 0) doc.text(EUR(r7),  mL, y + 7, { width: col7R  - mL - 6, align: 'right', lineBreak: false });
+    if (r19 > 0) doc.text(EUR(r19), mL, y + 7, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+    doc.font('Helvetica-Bold')
+       .text(EUR(ges), mL, y + 7, { width: cW - 6, align: 'right', lineBreak: false });
     y += ROW_H;
+    idx++;
   }
 
-  // Trennlinie
-  y += 6;
-  doc.rect(mL, y, cW, 0.8).fill('#000');
-  y += 12;
-
-  // Summen-Block
-  doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
-
-  // 7%-Block
-  doc.text('7% Umsatz (brutto):',  colR7 - 100, y, { lineBreak: false });
-  doc.text(sumR7.toFixed(2).replace('.', ',') + ' €', colR7, y, { width: colR19 - colR7, align: 'right', lineBreak: false });
-  y += 14;
-  doc.font('Helvetica').fillColor('#555');
-  doc.text('davon Netto (÷ 1,07):', colR7 - 100, y, { lineBreak: false });
-  doc.text((sumR7 / 1.07).toFixed(2).replace('.', ',') + ' €', colR7, y, { width: colR19 - colR7, align: 'right', lineBreak: false });
-  doc.text('MwSt 7%:', colR19 - 100, y, { lineBreak: false });
-  doc.text((sumR7 - sumR7 / 1.07).toFixed(2).replace('.', ',') + ' €', colR19, y, { width: colGes - colR19, align: 'right', lineBreak: false });
-  y += 20;
-
-  // 19%-Block
-  doc.font('Helvetica-Bold').fillColor('#000');
-  doc.text('19% Umsatz (brutto):', colR7 - 100, y, { lineBreak: false });
-  doc.text(sumR19.toFixed(2).replace('.', ',') + ' €', colR7, y, { width: colR19 - colR7, align: 'right', lineBreak: false });
-  y += 14;
-  doc.font('Helvetica').fillColor('#555');
-  doc.text('davon Netto (÷ 1,19):', colR7 - 100, y, { lineBreak: false });
-  doc.text((sumR19 / 1.19).toFixed(2).replace('.', ',') + ' €', colR7, y, { width: colR19 - colR7, align: 'right', lineBreak: false });
-  doc.text('MwSt 19%:', colR19 - 100, y, { lineBreak: false });
-  doc.text((sumR19 - sumR19 / 1.19).toFixed(2).replace('.', ',') + ' €', colR19, y, { width: colGes - colR19, align: 'right', lineBreak: false });
+  // Abschlusslinie
+  doc.rect(mL, y, cW, 1).fill(KB_C.border);
   y += 22;
 
-  // Gesamtsumme
-  doc.rect(mL + 140, y, cW - 140, 0.8).fill('#000');
-  y += 10;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#000');
-  doc.text('Gesamtumsatz Laden (brutto):', colR7 - 100, y, { lineBreak: false });
-  doc.text((sumR7 + sumR19).toFixed(2).replace('.', ',') + ' €', colGes, y, { width: W - mR - colGes, align: 'right', lineBreak: false });
-  y += 14;
-  doc.font('Helvetica').fontSize(9).fillColor('#555');
-  doc.text('Gesamtumsatz Netto:', colR7 - 100, y, { lineBreak: false });
-  doc.text((sumR7 / 1.07 + sumR19 / 1.19).toFixed(2).replace('.', ',') + ' €', colGes, y, { width: W - mR - colGes, align: 'right', lineBreak: false });
+  // ─── Summen-Block ─────────────────────────────────────────────────────────
+  const sumX   = mL + 140;
+  const sumCW  = cW - 140;
+  const valEnd = cW - 6;
 
-  // Fußzeile
-  doc.font('Helvetica').fontSize(8).fillColor('#666')
-     .text('Seite 1', mL, H - 30, { width: cW, align: 'center', lineBreak: false });
+  // 7%-Zeile
+  doc.rect(mL, y, cW, 26).fill(KB_C.bg);
+  doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5)
+     .text('7 % UMSATZ', sumX + 6, y + 3, { lineBreak: false });
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(9)
+     .text(EUR(sumR7), mL, y + 13, { width: col7R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('Netto (÷ 1,07)', mL, y + 3, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
+     .text(EUR(sumR7 / 1.07), mL, y + 14, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('MwSt 7 %', mL, y + 3, { width: valEnd, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
+     .text(EUR(sumR7 - sumR7 / 1.07), mL, y + 14, { width: valEnd, align: 'right', lineBreak: false });
+  y += 32;
 
+  // 19%-Zeile
+  doc.rect(mL, y, cW, 26).fill('#fff');
+  doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5)
+     .text('19 % UMSATZ', sumX + 6, y + 3, { lineBreak: false });
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(9)
+     .text(EUR(sumR19), mL, y + 13, { width: col7R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('Netto (÷ 1,19)', mL, y + 3, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
+     .text(EUR(sumR19 / 1.19), mL, y + 14, { width: col19R - mL - 6, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text('MwSt 19 %', mL, y + 3, { width: valEnd, align: 'right', lineBreak: false });
+  doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
+     .text(EUR(sumR19 - sumR19 / 1.19), mL, y + 14, { width: valEnd, align: 'right', lineBreak: false });
+  y += 38;
+
+  // Gesamtsumme mit Gold-Akzent
+  doc.rect(mL, y - 2, 3, 30).fill(KB_C.gold);
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(9)
+     .text('GESAMTUMSATZ LADEN (BRUTTO)', mL + 10, y + 4, { lineBreak: false });
+  doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(16)
+     .text(EUR(sumR7 + sumR19), mL, y, { width: valEnd, align: 'right', lineBreak: false });
+  y += 30;
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text(`Gesamtnetto: ${EUR(sumR7 / 1.07 + sumR19 / 1.19)}   ·   Gesamt-MwSt: ${EUR((sumR7 - sumR7/1.07) + (sumR19 - sumR19/1.19))}`,
+           mL + 10, y, { lineBreak: false });
+  y += 18;
+  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(8)
+     .text(`${ladenRows.length} Einträge · ${monthName} ${yearNum}`, mL + 10, y, { lineBreak: false });
+
+  kbFooter(doc);
   doc.end();
 }));
 
