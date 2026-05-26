@@ -173,7 +173,7 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     "SELECT * FROM daily_cash WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date ASC",
     [String(yearNum), String(monthNum).padStart(2, '0')]
   );
-  const lottoRows  = rows.rows.filter(e => Number(e.lotto_revenue) !== 0);
+  const lottoRows  = rows.rows;
   const dayMap     = {};
   lottoRows.forEach(e => { dayMap[parseInt(e.date.split('-')[2])] = e; });
   const totalLotto = lottoRows.reduce((s, e) => s + Number(e.lotto_revenue), 0);
@@ -215,11 +215,13 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
        .text(label, mL + 6, y + 4, { lineBreak: false });
     if (notes) doc.fillColor(KB_C.dark)
        .text(notes, colBem, y + 4, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
-    const lottoLabel = isAusz
-      ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
-      : lotto.toFixed(2).replace('.', ',') + ' €';
-    doc.fillColor(KB_C.dark).font('Helvetica-Bold')
-       .text(lottoLabel, mL, y + 4, { width: cW - 6, align: 'right', lineBreak: false });
+    if (lotto !== 0) {
+      const lottoLabel = isAusz
+        ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
+        : lotto.toFixed(2).replace('.', ',') + ' €';
+      doc.fillColor(KB_C.dark).font('Helvetica-Bold')
+         .text(lottoLabel, mL, y + 4, { width: cW - 6, align: 'right', lineBreak: false });
+    }
     y += ROW_H;
     idx++;
   }
