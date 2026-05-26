@@ -216,7 +216,7 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     if (notes) doc.fillColor(KB_C.dark)
        .text(notes, colBem, y + 4, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
     const lottoLabel = isAusz
-      ? '− ' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
+      ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
       : lotto.toFixed(2).replace('.', ',') + ' €';
     doc.fillColor(KB_C.dark).font('Helvetica-Bold')
        .text(lottoLabel, mL, y + 4, { width: cW - 6, align: 'right', lineBreak: false });
