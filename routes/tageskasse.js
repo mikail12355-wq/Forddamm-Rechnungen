@@ -117,7 +117,8 @@ const KB_C = {
 const KB_W = 595.28, KB_H = 841.89;
 const KB_ML = 52, KB_MR = 52;
 const KB_CW = KB_W - KB_ML - KB_MR;   // 491.28
-const KB_DAYS_DE = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'];
+const KB_DAYS_DE   = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'];
+const KB_DAYS_FULL = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
 
 // Kompakter Header — gibt Startposition der Tabelle zurück (~102px)
 function kbHeader(doc, title, subtitle, note) {
@@ -184,7 +185,6 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   doc.pipe(res);
 
   const mL  = KB_ML, cW = KB_CW;
-  const colBem = mL + 80;
   const ROW_H  = 16;
 
   let y = kbHeader(doc, 'LOTTO', `${monthName} ${yearNum}`);
@@ -192,9 +192,8 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5);
-  doc.text('TAG',       mL + 6, y + 6, { lineBreak: false });
-  doc.text('BEMERKUNG', colBem, y + 6, { lineBreak: false });
-  doc.text('UMSATZ',    mL,     y + 6, { width: cW - 6, align: 'right', lineBreak: false });
+  doc.text('TAG',    mL + 6, y + 6, { lineBreak: false });
+  doc.text('UMSATZ', mL,     y + 6, { width: cW - 6, align: 'right', lineBreak: false });
   y += 20;
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
@@ -207,14 +206,11 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     const lotto  = Number(e.lotto_revenue);
     const isAusz = lotto < 0;
     const date   = new Date(yearNum, monthNum - 1, day);
-    const label  = `${KB_DAYS_DE[date.getDay()]}  ${String(day).padStart(2, '0')}.`;
-    const notes  = e.notes || '';
+    const label  = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}, ${KB_DAYS_FULL[date.getDay()]}`;
 
     if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
     doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
        .text(label, mL + 6, y + 4, { lineBreak: false });
-    if (notes) doc.fillColor(KB_C.dark)
-       .text(notes, colBem, y + 4, { width: KB_W - KB_MR - colBem - 90, lineBreak: false });
     if (lotto !== 0) {
       const lottoLabel = isAusz
         ? '-' + Math.abs(lotto).toFixed(2).replace('.', ',') + ' €'
@@ -286,11 +282,9 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   doc.pipe(res);
 
   const mL  = KB_ML, cW = KB_CW;
-  // Spalten: Tag | Bemerkung | 7% brutto | 19% brutto | Gesamt
-  const colBem = mL + 68;
-  const col7W  = col7R => col7R - mL - 6;   // Hilfsfunktion für width
-  const col7RE  = mL + 290;  // rechter Rand 7%-Spalte
-  const col19RE = mL + 390;  // rechter Rand 19%-Spalte
+  // Spalten: Tag | 7% brutto | 19% brutto | Gesamt
+  const col7RE  = mL + 330;  // rechter Rand 7%-Spalte
+  const col19RE = mL + 420;  // rechter Rand 19%-Spalte
   const ROW_H   = 15;
   const EUR     = n => Number(n).toFixed(2).replace('.', ',') + ' €';
 
@@ -299,11 +293,10 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7);
-  doc.text('TAG',         mL + 6,  y + 6, { lineBreak: false });
-  doc.text('BEMERKUNG',   colBem,  y + 6, { lineBreak: false });
-  doc.text('7 % BRUTTO',  mL,      y + 6, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
-  doc.text('19 % BRUTTO', mL,      y + 6, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
-  doc.text('GESAMT',      mL,      y + 6, { width: cW - 6,           align: 'right', lineBreak: false });
+  doc.text('TAG',         mL + 6, y + 6, { lineBreak: false });
+  doc.text('7 % BRUTTO',  mL,     y + 6, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
+  doc.text('19 % BRUTTO', mL,     y + 6, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
+  doc.text('GESAMT',      mL,     y + 6, { width: cW - 6,           align: 'right', lineBreak: false });
   y += 20;
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
@@ -317,12 +310,11 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
     const r19  = Number(e.revenue_19);
     const ges  = r7 + r19;
     const date  = new Date(yearNum, monthNum - 1, day);
-    const label = `${KB_DAYS_DE[date.getDay()]}  ${String(day).padStart(2, '0')}.`;
+    const label = `${String(day).padStart(2,'0')}.${String(monthNum).padStart(2,'0')}.${yearNum}, ${KB_DAYS_FULL[date.getDay()]}`;
 
     if (idx % 2 === 1) doc.rect(mL, y, cW, ROW_H).fill(KB_C.rowAlt);
     doc.fillColor(KB_C.dark).font('Helvetica').fontSize(8.5)
        .text(label, mL + 6, y + 3, { lineBreak: false });
-    if (e.notes) doc.text(e.notes, colBem, y + 3, { width: col7RE - colBem - 8, lineBreak: false });
     if (r7  > 0) doc.text(EUR(r7),  mL, y + 3, { width: col7RE  - mL - 6, align: 'right', lineBreak: false });
     if (r19 > 0) doc.text(EUR(r19), mL, y + 3, { width: col19RE - mL - 6, align: 'right', lineBreak: false });
     doc.font('Helvetica-Bold')
