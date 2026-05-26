@@ -1,6 +1,20 @@
 <div class="page-header">
   <h2>Tageskasse</h2>
-  <a href="/tageskasse/neu" class="btn-primary">+ Neuer Eintrag</a>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <% if (year !== 'all' && month !== 'all') { %>
+      <a href="/tageskasse/kassenbericht-lotto?year=<%= year %>&month=<%= month %>"
+         class="btn-secondary" style="background:#f0a04b;color:#fff;border:none">
+        Lotto herunterladen
+      </a>
+      <a href="/tageskasse/kassenbericht-laden?year=<%= year %>&month=<%= month %>"
+         class="btn-secondary" style="background:#6fcf97;color:#fff;border:none">
+        Laden herunterladen
+      </a>
+    <% } else { %>
+      <span style="font-size:0.82rem;color:var(--mid)">Monat &amp; Jahr wählen für Kassenbericht</span>
+    <% } %>
+    <a href="/tageskasse/neu" class="btn-primary">+ Neuer Eintrag</a>
+  </div>
 </div>
 
 <!-- Filter -->
