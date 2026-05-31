@@ -93,9 +93,9 @@ function generatePDF(invoice, items, stream) {
      .text('LIEFERADRESSE',    c2, y, { lineBreak: false });
   y += 12;
 
-  const bill  = [invoice.customer_name, invoice.billing_street,
+  const bill  = [invoice.billing_name || invoice.customer_name, invoice.billing_street,
                  [invoice.billing_zip, invoice.billing_city].filter(Boolean).join(' ')].filter(Boolean);
-  const deliv = [invoice.customer_name, invoice.delivery_contact, invoice.delivery_street,
+  const deliv = [invoice.delivery_name || invoice.customer_name, invoice.delivery_contact, invoice.delivery_street,
                  [invoice.delivery_zip, invoice.delivery_city].filter(Boolean).join(' ')].filter(Boolean);
 
   const renderAddrCol = (lines, x, width) => {

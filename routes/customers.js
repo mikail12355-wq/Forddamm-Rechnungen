@@ -14,13 +14,13 @@ router.get('/neu', (req, res) => {
 });
 
 router.post('/neu', w(async (req, res) => {
-  const { name, billing_street, billing_zip, billing_city, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
+  const { name, billing_name, billing_street, billing_zip, billing_city, delivery_name, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
   if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect('/kunden/neu'); }
 
   const custRes = await db.execute(
-    `INSERT INTO customers (name, billing_street, billing_zip, billing_city, delivery_street, delivery_zip, delivery_city, cost_center)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'']
+    `INSERT INTO customers (name, billing_name, billing_street, billing_zip, billing_city, delivery_name, delivery_street, delivery_zip, delivery_city, cost_center)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name.trim(), billing_name||'', billing_street||'', billing_zip||'', billing_city||'', delivery_name||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'']
   );
   await saveCustomerPrices(Number(custRes.lastInsertRowid), req.body);
   req.flash('success', `Kunde "${name}" wurde angelegt.`);
@@ -39,12 +39,12 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
-  const { name, billing_street, billing_zip, billing_city, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
+  const { name, billing_name, billing_street, billing_zip, billing_city, delivery_name, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
   if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect(`/kunden/${req.params.id}/bearbeiten`); }
 
   await db.execute(
-    `UPDATE customers SET name=?, billing_street=?, billing_zip=?, billing_city=?, delivery_street=?, delivery_zip=?, delivery_city=?, cost_center=? WHERE id=?`,
-    [name.trim(), billing_street||'', billing_zip||'', billing_city||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'', +req.params.id]
+    `UPDATE customers SET name=?, billing_name=?, billing_street=?, billing_zip=?, billing_city=?, delivery_name=?, delivery_street=?, delivery_zip=?, delivery_city=?, cost_center=? WHERE id=?`,
+    [name.trim(), billing_name||'', billing_street||'', billing_zip||'', billing_city||'', delivery_name||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'', +req.params.id]
   );
   await saveCustomerPrices(+req.params.id, req.body);
   req.flash('success', `Kunde "${name}" aktualisiert.`);

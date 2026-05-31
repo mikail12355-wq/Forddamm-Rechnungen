@@ -19,6 +19,10 @@
   <div class="card">
     <h3 class="card-title">Rechnungsadresse</h3>
     <div class="form-grid">
+      <div class="form-group" style="grid-column: 1 / -1">
+        <label>Firmenname (Rechnungsadresse)</label>
+        <input type="text" name="billing_name" value="<%= customer ? customer.billing_name : '' %>" placeholder="Leer lassen = Hauptfirmenname wird verwendet" style="max-width:400px" />
+      </div>
       <div class="form-group">
         <label>Straße + Nr.</label>
         <input type="text" name="billing_street" value="<%= customer ? customer.billing_street : '' %>" />
@@ -37,6 +41,10 @@
   <div class="card">
     <h3 class="card-title">Lieferadresse</h3>
     <div class="form-grid">
+      <div class="form-group" style="grid-column: 1 / -1">
+        <label>Firmenname (Lieferadresse)</label>
+        <input type="text" name="delivery_name" value="<%= customer ? customer.delivery_name : '' %>" placeholder="Leer lassen = Hauptfirmenname wird verwendet" style="max-width:400px" />
+      </div>
       <div class="form-group">
         <label>Straße + Nr.</label>
         <input type="text" name="delivery_street" value="<%= customer ? customer.delivery_street : '' %>" />

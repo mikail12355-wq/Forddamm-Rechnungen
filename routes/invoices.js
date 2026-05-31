@@ -39,8 +39,8 @@ router.get('/export', w(async (req, res) => {
   const ph  = ids.map(() => '?').join(',');
   const [fullRes, itemsRes] = await Promise.all([
     db.execute(`
-      SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-        c.delivery_street, c.delivery_zip, c.delivery_city
+      SELECT i.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
+        c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
       FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
       WHERE i.id IN (${ph}) ORDER BY i.invoice_number ASC
     `, ids),

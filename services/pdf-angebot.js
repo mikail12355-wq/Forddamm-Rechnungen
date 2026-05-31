@@ -81,9 +81,9 @@ function generateAngebotPDF(quote, items, stream) {
      .text('LIEFERADRESSE',    c2, y, { lineBreak: false });
   y += 12;
 
-  const bill  = [quote.customer_name, quote.billing_street,
+  const bill  = [quote.billing_name || quote.customer_name, quote.billing_street,
                  [quote.billing_zip, quote.billing_city].filter(Boolean).join(' ')].filter(Boolean);
-  const deliv = [quote.customer_name, quote.delivery_contact, quote.delivery_street,
+  const deliv = [quote.delivery_name || quote.customer_name, quote.delivery_contact, quote.delivery_street,
                  [quote.delivery_zip, quote.delivery_city].filter(Boolean).join(' ')].filter(Boolean);
 
   const renderAddrCol = (lines, x, width) => {

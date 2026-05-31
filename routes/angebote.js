@@ -75,8 +75,8 @@ router.post('/neu', w(async (req, res) => {
 // ─── EINZELNES ANGEBOT ────────────────────────────────────────────────────────
 router.get('/:id', w(async (req, res) => {
   const qRes = await db.execute(`
-    SELECT q.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city
+    SELECT q.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
+      c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
     FROM quotes q LEFT JOIN customers c ON c.id = q.customer_id WHERE q.id = ?
   `, [+req.params.id]);
   const quote = qRes.rows[0];
@@ -91,8 +91,8 @@ router.get('/:id', w(async (req, res) => {
 
 router.get('/:id/pdf', w(async (req, res) => {
   const qRes = await db.execute(`
-    SELECT q.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city
+    SELECT q.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
+      c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
     FROM quotes q LEFT JOIN customers c ON c.id = q.customer_id WHERE q.id = ?
   `, [+req.params.id]);
   const quote = qRes.rows[0];
