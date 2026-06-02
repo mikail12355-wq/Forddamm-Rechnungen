@@ -56,6 +56,8 @@ app.get('/', (req, res) => {
   res.redirect('/login');
 });
 
+app.get('/ping', (req, res) => res.sendStatus(200));
+
 // Global error handler — catches unhandled async errors in routes
 app.use((err, req, res, next) => {
   console.error('Unhandled route error:', err);
