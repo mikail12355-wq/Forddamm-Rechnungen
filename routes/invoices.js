@@ -147,8 +147,8 @@ router.post('/neu', w(async (req, res) => {
 // ─── EINZELNE RECHNUNG ────────────────────────────────────────────────────────
 router.get('/:id', w(async (req, res) => {
   const invRes = await db.execute(`
-    SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city
+    SELECT i.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
+      c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
   const invoice = invRes.rows[0];
@@ -163,8 +163,8 @@ router.get('/:id', w(async (req, res) => {
 
 router.get('/:id/pdf', w(async (req, res) => {
   const invRes = await db.execute(`
-    SELECT i.*, c.name as customer_name, c.billing_street, c.billing_zip, c.billing_city,
-      c.delivery_street, c.delivery_zip, c.delivery_city
+    SELECT i.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
+      c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
   `, [+req.params.id]);
   const invoice = invRes.rows[0];
