@@ -30,14 +30,14 @@
     <div>
       <div class="inv-label">Rechnungsadresse:</div>
       <div>An</div>
-      <div><strong><%= invoice.customer_name %></strong></div>
+      <div><strong><%= invoice.billing_name || invoice.customer_name %></strong></div>
       <% if (invoice.billing_street) { %><div><%= invoice.billing_street %></div><% } %>
       <% if (invoice.billing_zip || invoice.billing_city) { %><div><%= invoice.billing_zip %> <%= invoice.billing_city %></div><% } %>
     </div>
     <div>
       <div class="inv-label">Lieferadresse:</div>
       <div>An</div>
-      <div><strong><%= invoice.customer_name %></strong></div>
+      <div><strong><%= invoice.delivery_name || invoice.customer_name %></strong></div>
       <% if (invoice.delivery_contact) { %><div><%= invoice.delivery_contact %></div><% } %>
       <% if (invoice.delivery_street) { %><div><%= invoice.delivery_street %></div><% } %>
       <% if (invoice.delivery_zip || invoice.delivery_city) { %><div><%= invoice.delivery_zip %> <%= invoice.delivery_city %></div><% } %>

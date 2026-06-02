@@ -24,14 +24,14 @@
     <div>
       <div class="inv-label">Rechnungsadresse:</div>
       <div>An</div>
-      <div><strong><%= quote.customer_name %></strong></div>
+      <div><strong><%= quote.billing_name || quote.customer_name %></strong></div>
       <% if (quote.billing_street) { %><div><%= quote.billing_street %></div><% } %>
       <% if (quote.billing_zip || quote.billing_city) { %><div><%= quote.billing_zip %> <%= quote.billing_city %></div><% } %>
     </div>
     <div>
       <div class="inv-label">Lieferadresse:</div>
       <div>An</div>
-      <div><strong><%= quote.customer_name %></strong></div>
+      <div><strong><%= quote.delivery_name || quote.customer_name %></strong></div>
       <% if (quote.delivery_contact) { %><div><%= quote.delivery_contact %></div><% } %>
       <% if (quote.delivery_street) { %><div><%= quote.delivery_street %></div><% } %>
       <% if (quote.delivery_zip || quote.delivery_city) { %><div><%= quote.delivery_zip %> <%= quote.delivery_city %></div><% } %>
