@@ -68,10 +68,13 @@ async function extractTextFromPdf(filePath) {
   return parsed.text || '';
 }
 
-async function extractInvoiceData(filePath, mimeType) {
+async function extractInvoiceData(files) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY nicht konfiguriert.');
   }
+
+  // Normalize: accept single {path, mimetype} object or array
+  if (!Array.isArray(files)) files = [files];
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
@@ -79,32 +82,33 @@ async function extractInvoiceData(filePath, mimeType) {
     generationConfig: { maxOutputTokens: 65536, temperature: 0.1 }
   });
 
-  let parts;
+  const parts = [];
 
-  if (mimeType === 'application/pdf') {
-    const pdfText = await extractTextFromPdf(filePath);
-    console.log(`[OCR] PDF-Text extrahiert: ${pdfText.trim().length} Zeichen`);
+  for (let i = 0; i < files.length; i++) {
+    const { path: filePath, mimetype: mimeType } = files[i];
+    const label = files.length > 1 ? `[Seite ${i + 1} von ${files.length}] ` : '';
 
-    if (pdfText.trim().length < 100) {
-      console.log('[OCR] Gescanntes PDF → sende als Base64');
-      const base64Data = fs.readFileSync(filePath).toString('base64');
-      parts = [
-        { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-        { text: EXTRACT_PROMPT }
-      ];
+    if (mimeType === 'application/pdf') {
+      const pdfText = await extractTextFromPdf(filePath);
+      console.log(`[OCR] ${label}PDF-Text extrahiert: ${pdfText.trim().length} Zeichen`);
+
+      if (pdfText.trim().length < 100) {
+        console.log(`[OCR] ${label}Gescanntes PDF → sende als Base64`);
+        const base64Data = fs.readFileSync(filePath).toString('base64');
+        parts.push({ inlineData: { mimeType: 'application/pdf', data: base64Data } });
+      } else {
+        console.log(`[OCR] ${label}Text-PDF → sende als Text`);
+        parts.push({ text: `--- RECHNUNGSSEITE ${i + 1} (PDF-Text) ---\n${pdfText}` });
+      }
     } else {
-      console.log('[OCR] Text-PDF → sende als Text');
-      parts = [{ text: `${EXTRACT_PROMPT}\n\n--- RECHNUNGSTEXT ---\n${pdfText}` }];
+      const base64Data = fs.readFileSync(filePath).toString('base64');
+      const allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const mediaType  = allowed.includes(mimeType) ? mimeType : 'image/jpeg';
+      parts.push({ inlineData: { mimeType: mediaType, data: base64Data } });
     }
-  } else {
-    const base64Data = fs.readFileSync(filePath).toString('base64');
-    const allowed    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    const mediaType  = allowed.includes(mimeType) ? mimeType : 'image/jpeg';
-    parts = [
-      { inlineData: { mimeType: mediaType, data: base64Data } },
-      { text: EXTRACT_PROMPT }
-    ];
   }
+
+  parts.push({ text: EXTRACT_PROMPT });
 
   console.log('[OCR] Sende Anfrage an Gemini (streaming)...');
   const streamResult = await model.generateContentStream(parts);

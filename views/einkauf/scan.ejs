@@ -5,7 +5,7 @@
 
 <div class="card" style="max-width:560px">
   <p style="color:var(--mid);font-size:0.88rem;margin-bottom:20px">
-    Lade ein Foto oder PDF deiner Eingangsrechnung hoch. Die KI liest automatisch Lieferant, Produkte, Mengen und Preise aus — du prüfst die Daten kurz und speicherst.
+    Lade ein oder mehrere Fotos deiner Eingangsrechnung hoch. Bei mehrseitigen Rechnungen einfach alle Seiten hinzufügen — die KI liest alle Seiten auf einmal aus.
   </p>
 
   <form action="/einkauf/scan" method="POST" enctype="multipart/form-data" id="scan-form">
@@ -14,38 +14,44 @@
     <div id="drop-zone" style="
       border: 2px dashed var(--border);
       border-radius: 12px;
-      padding: 40px 24px;
+      padding: 32px 24px;
       text-align: center;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
       margin-bottom: 16px;
     ">
-      <div id="drop-icon" style="font-size:2.4rem;margin-bottom:8px">📄</div>
-      <div id="drop-text" style="font-weight:600;color:var(--dark);margin-bottom:4px">Datei hierher ziehen</div>
-      <div style="font-size:0.82rem;color:var(--mid)">oder unten auswählen — JPG, PNG, WEBP, PDF bis 20 MB</div>
+      <div style="font-size:2rem;margin-bottom:8px">📄</div>
+      <div style="font-weight:600;color:var(--dark);margin-bottom:4px">Dateien hierher ziehen</div>
+      <div style="font-size:0.82rem;color:var(--mid)">JPG, PNG, WEBP, PDF bis 20 MB pro Seite</div>
     </div>
 
-    <!-- File input (hidden, triggered by drop zone click) -->
-    <input type="file" id="file-input" name="scan_file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-           style="display:none" required />
+    <!-- Hidden file inputs -->
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none" multiple />
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" />
 
-    <!-- Camera button (mobile) -->
-    <input type="file" id="camera-input" name="scan_file" accept="image/*" capture="environment"
-           style="display:none" />
-
+    <!-- Buttons -->
     <div style="display:flex;gap:10px;margin-bottom:20px">
       <button type="button" id="choose-file-btn" class="btn-secondary" style="flex:1">
-        📂 Datei auswählen
+        📂 Dateien auswählen
       </button>
       <button type="button" id="camera-btn" class="btn-secondary" style="flex:1">
         📷 Foto aufnehmen
       </button>
     </div>
 
-    <!-- Preview -->
-    <div id="file-preview" style="display:none;margin-bottom:16px;padding:12px;background:var(--warm);border-radius:8px;font-size:0.88rem">
-      <strong>Ausgewählt:</strong> <span id="file-name"></span>
+    <!-- File list -->
+    <div id="file-list" style="display:none;margin-bottom:16px">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--dark);margin-bottom:8px">
+        Ausgewählte Seiten: <span id="file-count">0</span>
+      </div>
+      <ul id="file-items" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px"></ul>
+      <button type="button" id="add-more-btn" class="btn-secondary" style="margin-top:10px;font-size:0.82rem;padding:6px 14px">
+        + Weitere Seite hinzufügen
+      </button>
     </div>
+
+    <!-- Actual file input that gets submitted (filled via JS on submit) -->
+    <input type="file" id="actual-submit-input" name="scan_files" multiple style="display:none" />
 
     <!-- Submit -->
     <button type="submit" id="submit-btn" class="btn-primary btn-lg" style="width:100%" disabled>
@@ -61,56 +67,97 @@
 
 <script>
 (function () {
-  const dropZone    = document.getElementById('drop-zone');
-  const fileInput   = document.getElementById('file-input');
-  const cameraInput = document.getElementById('camera-input');
-  const preview     = document.getElementById('file-preview');
-  const fileName    = document.getElementById('file-name');
-  const submitBtn   = document.getElementById('submit-btn');
-  const btnText     = document.getElementById('btn-text');
-  const btnSpinner  = document.getElementById('btn-spinner');
-  const form        = document.getElementById('scan-form');
-  let activeInput   = fileInput;
+  const dropZone     = document.getElementById('drop-zone');
+  const fileInput    = document.getElementById('file-input');
+  const cameraInput  = document.getElementById('camera-input');
+  const fileList     = document.getElementById('file-list');
+  const fileItems    = document.getElementById('file-items');
+  const fileCount    = document.getElementById('file-count');
+  const submitBtn    = document.getElementById('submit-btn');
+  const btnText      = document.getElementById('btn-text');
+  const btnSpinner   = document.getElementById('btn-spinner');
+  const form         = document.getElementById('scan-form');
+  const actualInput  = document.getElementById('actual-submit-input');
+  const addMoreBtn   = document.getElementById('add-more-btn');
 
-  function showFile(file) {
-    if (!file) return;
-    fileName.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
-    preview.style.display = 'block';
-    dropZone.style.borderColor = 'var(--gold)';
-    dropZone.style.background  = 'rgba(200,145,58,0.05)';
-    document.getElementById('drop-icon').textContent = file.type === 'application/pdf' ? '📋' : '🖼️';
-    document.getElementById('drop-text').textContent = 'Datei bereit';
-    submitBtn.disabled = false;
+  // Accumulated files
+  let allFiles = [];
+
+  function renderList() {
+    fileItems.innerHTML = '';
+    allFiles.forEach((file, i) => {
+      const li = document.createElement('li');
+      li.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--warm);border-radius:8px;font-size:0.85rem';
+      const icon = file.type === 'application/pdf' ? '📋' : '🖼️';
+      const size = (file.size / 1024).toFixed(0);
+      li.innerHTML = `
+        <span style="font-size:1.2rem">${icon}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <strong>Seite ${i + 1}:</strong> ${file.name} <span style="color:var(--mid)">(${size} KB)</span>
+        </span>
+        <button type="button" data-index="${i}" style="background:none;border:none;cursor:pointer;color:var(--mid);font-size:1rem;padding:0 4px" title="Entfernen">✕</button>
+      `;
+      li.querySelector('button').addEventListener('click', () => {
+        allFiles.splice(i, 1);
+        update();
+      });
+      fileItems.appendChild(li);
+    });
+
+    fileCount.textContent = allFiles.length;
+    fileList.style.display = allFiles.length > 0 ? 'block' : 'none';
+    submitBtn.disabled = allFiles.length === 0;
+
+    if (allFiles.length > 0) {
+      dropZone.style.borderColor = 'var(--gold)';
+      dropZone.style.background  = 'rgba(200,145,58,0.05)';
+    } else {
+      dropZone.style.borderColor = 'var(--border)';
+      dropZone.style.background  = '';
+    }
   }
 
-  dropZone.addEventListener('click', () => fileInput.click());
-  document.getElementById('choose-file-btn').addEventListener('click', () => { activeInput = fileInput; fileInput.click(); });
-  document.getElementById('camera-btn').addEventListener('click', () => { activeInput = cameraInput; cameraInput.click(); });
+  function addFiles(newFiles) {
+    for (const f of newFiles) {
+      allFiles.push(f);
+    }
+    update();
+  }
 
-  fileInput.addEventListener('change',   () => { if (fileInput.files[0])   { activeInput = fileInput;   showFile(fileInput.files[0]); } });
-  cameraInput.addEventListener('change', () => { if (cameraInput.files[0]) { activeInput = cameraInput; showFile(cameraInput.files[0]); } });
+  function update() {
+    renderList();
+  }
+
+  // Drop zone click → file picker
+  dropZone.addEventListener('click', () => fileInput.click());
+  document.getElementById('choose-file-btn').addEventListener('click', () => fileInput.click());
+  document.getElementById('camera-btn').addEventListener('click', () => cameraInput.click());
+  addMoreBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) addFiles(Array.from(fileInput.files));
+    fileInput.value = '';
+  });
+
+  cameraInput.addEventListener('change', () => {
+    if (cameraInput.files.length) addFiles(Array.from(cameraInput.files));
+    cameraInput.value = '';
+  });
 
   // Drag & drop
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--gold)'; });
-  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border)'; });
+  dropZone.addEventListener('dragleave', () => { if (!allFiles.length) dropZone.style.borderColor = 'var(--border)'; });
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fileInput.files = dt.files;
-    activeInput = fileInput;
-    showFile(file);
+    if (e.dataTransfer.files.length) addFiles(Array.from(e.dataTransfer.files));
   });
 
-  // On submit: swap the non-active input name so only one "scan_file" is sent
+  // On submit: assign all accumulated files to the hidden submit input
   form.addEventListener('submit', e => {
-    if (activeInput === fileInput) {
-      cameraInput.removeAttribute('name');
-    } else {
-      fileInput.removeAttribute('name');
-    }
+    if (!allFiles.length) { e.preventDefault(); return; }
+    const dt = new DataTransfer();
+    allFiles.forEach(f => dt.items.add(f));
+    actualInput.files = dt.files;
     submitBtn.disabled = true;
     btnText.style.display    = 'none';
     btnSpinner.style.display = 'inline';

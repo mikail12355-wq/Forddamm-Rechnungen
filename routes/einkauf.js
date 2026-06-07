@@ -107,16 +107,17 @@ router.get('/scan', (req, res) => {
 });
 
 // Process scan with Claude AI
-router.post('/scan', scanUpload.single('scan_file'), async (req, res) => {
-  if (!req.file) {
+router.post('/scan', scanUpload.array('scan_files', 10), async (req, res) => {
+  const files = req.files || [];
+  if (!files.length) {
     req.flash('error', 'Keine Datei hochgeladen.');
     return res.redirect('/einkauf/scan');
   }
 
   try {
     const { extractInvoiceData } = require('../services/ocr');
-    const extracted = await extractInvoiceData(req.file.path, req.file.mimetype);
-    fs.unlink(req.file.path, () => {});
+    const extracted = await extractInvoiceData(files.map(f => ({ path: f.path, mimetype: f.mimetype })));
+    files.forEach(f => fs.unlink(f.path, () => {}));
 
     const suppliers = await db.execute('SELECT * FROM suppliers ORDER BY name');
     const today = new Date().toISOString().split('T')[0];
@@ -128,7 +129,7 @@ router.post('/scan', scanUpload.single('scan_file'), async (req, res) => {
       editMode: false, editInvoice: null, editItems: [],
     });
   } catch (err) {
-    fs.unlink(req.file?.path || '', () => {});
+    files.forEach(f => fs.unlink(f.path, () => {}));
     console.error('OCR Fehler:', err);
     req.flash('error', `Fehler: ${err.message}`);
     res.redirect('/einkauf/scan');
