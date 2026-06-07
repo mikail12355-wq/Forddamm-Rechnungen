@@ -68,7 +68,12 @@
           <td><strong><%= item.product_name %></strong></td>
           <td><%= String(item.quantity).replace('.', ',') %></td>
           <td><%= item.unit %></td>
-          <td><%= item.unit_price.toFixed(2).replace('.',',') %> €</td>
+          <td>
+            <%= item.unit_price.toFixed(2).replace('.',',') %> €
+            <% if (item.pieces_per_unit) { %>
+              <br><small style="color:var(--mid)"><%= item.pieces_per_unit %> Stk/Einh. · <%= (item.unit_price / item.pieces_per_unit).toFixed(2).replace('.',',') %> €/Stk</small>
+            <% } %>
+          </td>
           <td><%= lineTotal.toFixed(2).replace('.',',') %> €</td>
         </tr>
       <% }) %>

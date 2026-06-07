@@ -212,12 +212,13 @@ router.post('/neu', upload.single('pdf'), async (req, res) => {
   const invoiceId = Number(invRes.lastInsertRowid);
 
   const { CATEGORIES } = require('../services/ocr');
-  const names      = Array.isArray(item_name)             ? item_name             : (item_name             ? [item_name]             : []);
-  const qtys       = Array.isArray(item_qty)              ? item_qty              : (item_qty              ? [item_qty]              : []);
-  const units      = Array.isArray(item_unit)             ? item_unit             : (item_unit             ? [item_unit]             : []);
-  const prices     = Array.isArray(item_price)            ? item_price            : (item_price            ? [item_price]            : []);
-  const lineTotals = Array.isArray(req.body.item_line_total)  ? req.body.item_line_total  : (req.body.item_line_total  ? [req.body.item_line_total]  : []);
-  const categories = Array.isArray(req.body.item_category)    ? req.body.item_category    : (req.body.item_category    ? [req.body.item_category]    : []);
+  const names       = Array.isArray(item_name)  ? item_name  : (item_name  ? [item_name]  : []);
+  const qtys        = Array.isArray(item_qty)   ? item_qty   : (item_qty   ? [item_qty]   : []);
+  const units       = Array.isArray(item_unit)  ? item_unit  : (item_unit  ? [item_unit]  : []);
+  const prices      = Array.isArray(item_price) ? item_price : (item_price ? [item_price] : []);
+  const lineTotals  = Array.isArray(req.body.item_line_total)      ? req.body.item_line_total      : (req.body.item_line_total      ? [req.body.item_line_total]      : []);
+  const categories  = Array.isArray(req.body.item_category)        ? req.body.item_category        : (req.body.item_category        ? [req.body.item_category]        : []);
+  const ppuList     = Array.isArray(req.body.item_pieces_per_unit) ? req.body.item_pieces_per_unit : (req.body.item_pieces_per_unit ? [req.body.item_pieces_per_unit] : []);
 
   for (let i = 0; i < names.length; i++) {
     if (!names[i]?.trim()) continue;
@@ -226,9 +227,10 @@ router.post('/neu', upload.single('pdf'), async (req, res) => {
     const unit      = units[i]?.trim() || 'kg';
     const lineTotal = lineTotals[i] ? parseFloat(String(lineTotals[i]).replace(',', '.')) : null;
     const category  = CATEGORIES.includes(categories[i]) ? categories[i] : 'Sonstiges';
+    const ppu       = ppuList[i] ? parseInt(ppuList[i]) : null;
     await db.execute(
-      'INSERT INTO purchase_items (purchase_invoice_id, product_name, quantity, unit, unit_price, line_total, category) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [invoiceId, names[i].trim(), qty, unit, price, isNaN(lineTotal) ? null : lineTotal, category]
+      'INSERT INTO purchase_items (purchase_invoice_id, product_name, quantity, unit, unit_price, line_total, category, pieces_per_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [invoiceId, names[i].trim(), qty, unit, price, isNaN(lineTotal) ? null : lineTotal, category, isNaN(ppu) ? null : ppu]
     );
   }
 
@@ -326,12 +328,13 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
   // Positionen neu setzen
   await db.execute('DELETE FROM purchase_items WHERE purchase_invoice_id = ?', [+req.params.id]);
   const { CATEGORIES } = require('../services/ocr');
-  const names      = Array.isArray(item_name)             ? item_name             : (item_name             ? [item_name]             : []);
-  const qtys       = Array.isArray(item_qty)              ? item_qty              : (item_qty              ? [item_qty]              : []);
-  const units      = Array.isArray(item_unit)             ? item_unit             : (item_unit             ? [item_unit]             : []);
-  const prices     = Array.isArray(item_price)            ? item_price            : (item_price            ? [item_price]            : []);
-  const lineTotals = Array.isArray(req.body.item_line_total) ? req.body.item_line_total : (req.body.item_line_total ? [req.body.item_line_total] : []);
-  const categories = Array.isArray(req.body.item_category)   ? req.body.item_category   : (req.body.item_category   ? [req.body.item_category]   : []);
+  const names      = Array.isArray(item_name)  ? item_name  : (item_name  ? [item_name]  : []);
+  const qtys       = Array.isArray(item_qty)   ? item_qty   : (item_qty   ? [item_qty]   : []);
+  const units      = Array.isArray(item_unit)  ? item_unit  : (item_unit  ? [item_unit]  : []);
+  const prices     = Array.isArray(item_price) ? item_price : (item_price ? [item_price] : []);
+  const lineTotals = Array.isArray(req.body.item_line_total)      ? req.body.item_line_total      : (req.body.item_line_total      ? [req.body.item_line_total]      : []);
+  const categories = Array.isArray(req.body.item_category)        ? req.body.item_category        : (req.body.item_category        ? [req.body.item_category]        : []);
+  const ppuList    = Array.isArray(req.body.item_pieces_per_unit) ? req.body.item_pieces_per_unit : (req.body.item_pieces_per_unit ? [req.body.item_pieces_per_unit] : []);
 
   for (let i = 0; i < names.length; i++) {
     if (!names[i]?.trim()) continue;
@@ -340,9 +343,10 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
     const unit      = units[i]?.trim() || 'kg';
     const lineTotal = lineTotals[i] ? parseFloat(String(lineTotals[i]).replace(',', '.')) : null;
     const category  = CATEGORIES.includes(categories[i]) ? categories[i] : 'Sonstiges';
+    const ppu       = ppuList[i] ? parseInt(ppuList[i]) : null;
     await db.execute(
-      'INSERT INTO purchase_items (purchase_invoice_id, product_name, quantity, unit, unit_price, line_total, category) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [+req.params.id, names[i].trim(), qty, unit, price, isNaN(lineTotal) ? null : lineTotal, category]
+      'INSERT INTO purchase_items (purchase_invoice_id, product_name, quantity, unit, unit_price, line_total, category, pieces_per_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [+req.params.id, names[i].trim(), qty, unit, price, isNaN(lineTotal) ? null : lineTotal, category, isNaN(ppu) ? null : ppu]
     );
   }
 

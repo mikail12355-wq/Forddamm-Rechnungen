@@ -86,11 +86,12 @@
   <div class="card">
     <h3 class="card-title">Positionen</h3>
     <div id="einkauf-items">
-      <div class="items-header" style="grid-template-columns: 2fr 1fr 1fr 1fr auto">
+      <div class="items-header" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto">
         <span>Produkt / Artikel</span>
         <span>Menge</span>
         <span>Einheit</span>
-        <span>Einzelpreis (netto)</span>
+        <span>Preis/Einheit (netto)</span>
+        <span>Stk/Einheit</span>
         <span></span>
       </div>
     </div>
@@ -146,27 +147,49 @@ function updateEinkaufTotal() {
   document.getElementById('einkauf-total').textContent = sum.toFixed(2).replace('.', ',') + ' €';
 }
 
-function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal = null, category = 'Sonstiges') {
+function calcPricePerPiece(price, pieces) {
+  const p = parseFloat(String(price).replace(',', '.'));
+  const s = parseInt(pieces);
+  if (!isNaN(p) && !isNaN(s) && s > 0 && p > 0) {
+    return (p / s).toFixed(2).replace('.', ',') + ' €/Stk';
+  }
+  return '';
+}
+
+function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal = null, category = 'Sonstiges', piecesPerUnit = '') {
   const row = document.createElement('div');
   row.className = 'item-row einkauf-row';
-  row.style.gridTemplateColumns = '2fr 1fr 1fr 1fr auto';
+  row.style.gridTemplateColumns = '2fr 1fr 1fr 1fr 1fr auto';
 
-  const qtyDisplay   = qty   !== '' ? String(qty).replace('.', ',')   : '';
-  const priceDisplay = price !== '' ? parseFloat(price).toFixed(2).replace('.', ',') : '';
-  const ltValue      = lineTotal !== null && lineTotal !== undefined ? String(lineTotal) : '';
+  const qtyDisplay    = qty !== '' ? String(qty).replace('.', ',') : '';
+  const priceDisplay  = price !== '' ? parseFloat(price).toFixed(2).replace('.', ',') : '';
+  const ltValue       = lineTotal !== null && lineTotal !== undefined ? String(lineTotal) : '';
+  const ppuDisplay    = piecesPerUnit ? String(piecesPerUnit) : '';
 
   row.innerHTML = `
-    <input type="text"   name="item_name"       class="ei-name"       value="${escHtml(name)}"         placeholder="z.B. Weizenmehl Typ 405" required />
-    <input type="text"   name="item_qty"        class="ei-qty"        value="${escHtml(qtyDisplay)}"   placeholder="1"    required />
-    <select              name="item_unit"        class="ei-unit">${buildUnitOptions(unit)}</select>
-    <input type="text"   name="item_price"      class="ei-price"      value="${escHtml(priceDisplay)}" placeholder="0,00" required />
-    <input type="hidden" name="item_line_total" class="ei-line-total" value="${escHtml(ltValue)}" />
-    <input type="hidden" name="item_category"   class="ei-category"  value="${escHtml(category || 'Sonstiges')}" />
+    <input type="text"   name="item_name"            class="ei-name"       value="${escHtml(name)}"         placeholder="z.B. Weizenmehl Typ 405" required />
+    <input type="text"   name="item_qty"             class="ei-qty"        value="${escHtml(qtyDisplay)}"   placeholder="1"    required />
+    <select              name="item_unit"             class="ei-unit">${buildUnitOptions(unit)}</select>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <input type="text" name="item_price"           class="ei-price"      value="${escHtml(priceDisplay)}" placeholder="0,00" required />
+      <span class="ei-per-piece" style="font-size:0.72rem;color:var(--mid);min-height:14px">${escHtml(calcPricePerPiece(priceDisplay, ppuDisplay))}</span>
+    </div>
+    <input type="number" name="item_pieces_per_unit" class="ei-ppu"        value="${escHtml(ppuDisplay)}"   placeholder="—" min="1" style="width:100%" />
+    <input type="hidden" name="item_line_total"      class="ei-line-total" value="${escHtml(ltValue)}" />
+    <input type="hidden" name="item_category"        class="ei-category"   value="${escHtml(category || 'Sonstiges')}" />
     <button type="button" class="remove-row" title="Entfernen">×</button>
   `;
+
+  function refreshPerPiece() {
+    const priceVal = row.querySelector('.ei-price').value;
+    const ppuVal   = row.querySelector('.ei-ppu').value;
+    row.querySelector('.ei-per-piece').textContent = calcPricePerPiece(priceVal, ppuVal);
+  }
+
   row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateEinkaufTotal(); });
   row.querySelector('.ei-qty').addEventListener('input',   () => { row.querySelector('.ei-line-total').value = ''; updateEinkaufTotal(); });
-  row.querySelector('.ei-price').addEventListener('input', () => { row.querySelector('.ei-line-total').value = ''; updateEinkaufTotal(); });
+  row.querySelector('.ei-price').addEventListener('input', () => { row.querySelector('.ei-line-total').value = ''; updateEinkaufTotal(); refreshPerPiece(); });
+  row.querySelector('.ei-ppu').addEventListener('input',   () => refreshPerPiece());
   document.getElementById('einkauf-items').appendChild(row);
   updateEinkaufTotal();
 }
@@ -174,9 +197,9 @@ function addEinkaufRow(name = '', qty = '', unit = 'kg', price = '', lineTotal =
 document.getElementById('add-einkauf-row').addEventListener('click', () => addEinkaufRow());
 
 if (EDIT_MODE && EDIT_ITEMS.length > 0) {
-  EDIT_ITEMS.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category));
+  EDIT_ITEMS.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category, item.pieces_per_unit || ''));
 } else if (SCAN_DATA && Array.isArray(SCAN_DATA.items) && SCAN_DATA.items.length > 0) {
-  SCAN_DATA.items.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category));
+  SCAN_DATA.items.forEach(item => addEinkaufRow(item.product_name, item.quantity, item.unit, item.unit_price, item.line_total, item.category, item.pieces_per_unit || ''));
 } else {
   addEinkaufRow();
 }

@@ -98,6 +98,8 @@ async function initDB() {
   await db.execute("ALTER TABLE purchase_items ADD COLUMN line_total REAL").catch(() => {});
   // Migration: category for purchase_items
   await db.execute("ALTER TABLE purchase_items ADD COLUMN category TEXT DEFAULT 'Sonstiges'").catch(() => {});
+  // Migration: pieces per unit (e.g. Stück pro Karton)
+  await db.execute("ALTER TABLE purchase_items ADD COLUMN pieces_per_unit INTEGER DEFAULT NULL").catch(() => {});
   // Migration: separate company names for billing and delivery address
   await db.execute("ALTER TABLE customers ADD COLUMN billing_name TEXT DEFAULT ''").catch(() => {});
   await db.execute("ALTER TABLE customers ADD COLUMN delivery_name TEXT DEFAULT ''").catch(() => {});
