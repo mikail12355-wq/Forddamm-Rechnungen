@@ -300,8 +300,12 @@ async function initDB() {
     );
   }
 
-  // Firma 2 DB (schneiderei) initialisieren (leere Tabellen)
-  await initCompanyDB(getCompanyDb(2));
+  // Firma 2 DB (schneiderei) initialisieren — Fehler hier dürfen den Server nicht stoppen
+  try {
+    await initCompanyDB(getCompanyDb(2));
+  } catch (err) {
+    console.error('Schneiderei-DB konnte nicht initialisiert werden:', err.message);
+  }
 }
 
 module.exports = { masterDb, db: masterDb, getCompanyDb, initDB };
