@@ -263,6 +263,7 @@ async function initDB() {
       ['admin', hash, 1]
     );
   }
+  await masterDb.execute("UPDATE users SET company_id = 1 WHERE username = 'admin'").catch(() => {});
 
   // Benutzer: schneider → Firma 2
   const schnRes = await masterDb.execute("SELECT id FROM users WHERE username = 'schneider'");
@@ -273,6 +274,7 @@ async function initDB() {
       ['schneider', hash, 2]
     );
   }
+  await masterDb.execute("UPDATE users SET company_id = 2 WHERE username = 'schneider'").catch(() => {});
 
   // Firma 1 DB (= masterDb) initialisieren + Seed-Daten
   await initCompanyDB(masterDb);
