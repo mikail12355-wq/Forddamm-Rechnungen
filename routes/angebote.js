@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 const generateAngebotPDF = require('../services/pdf-angebot');
 
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 // ─── LISTE ────────────────────────────────────────────────────────────────────
 router.get('/', w(async (req, res) => {
+  const db = req.db;
   const { search, sort = 'desc', year = 'all', period = 'all' } = req.query;
   const [result, yearsRes] = await Promise.all([
-    queryQuotes({ search, sort, year, period }),
+    queryQuotes(db, { search, sort, year, period }),
     db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM quotes ORDER BY y DESC")
   ]);
   const years = yearsRes.rows.map(r => r.y).filter(Boolean);
@@ -21,6 +21,7 @@ router.get('/', w(async (req, res) => {
 
 // ─── NEUES ANGEBOT ────────────────────────────────────────────────────────────
 router.get('/neu', w(async (req, res) => {
+  const db = req.db;
   const [custRes, artRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
@@ -36,6 +37,7 @@ router.get('/neu', w(async (req, res) => {
 }));
 
 router.post('/neu', w(async (req, res) => {
+  const db = req.db;
   const { date, valid_until, delivery_from, delivery_to, customer_id,
           order_number, notes, delivery_contact, cost_center, subject,
           item_name, item_qty, item_price } = req.body;
@@ -74,6 +76,8 @@ router.post('/neu', w(async (req, res) => {
 
 // ─── EINZELNES ANGEBOT ────────────────────────────────────────────────────────
 router.get('/:id', w(async (req, res) => {
+  const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
   const qRes = await db.execute(`
     SELECT q.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
@@ -85,11 +89,15 @@ router.get('/:id', w(async (req, res) => {
   const itemsRes = await db.execute('SELECT * FROM quote_items WHERE quote_id = ? ORDER BY sort_order', [quote.id]);
   const items = itemsRes.rows;
   const totalNetto = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
-  const ust = totalNetto * 0.07;
-  res.render('angebote/view', { title: `Angebot Nr. ${quote.quote_number}`, quote, items, totalNetto, ust, totalBrutto: totalNetto + ust });
+  const ust = totalNetto * vatRate;
+  res.render('angebote/view', {
+    title: `Angebot Nr. ${quote.quote_number}`, quote, items,
+    totalNetto, ust, totalBrutto: totalNetto + ust, vatRate
+  });
 }));
 
 router.get('/:id/pdf', w(async (req, res) => {
+  const db = req.db;
   const qRes = await db.execute(`
     SELECT q.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
@@ -101,10 +109,11 @@ router.get('/:id/pdf', w(async (req, res) => {
   const itemsRes = await db.execute('SELECT * FROM quote_items WHERE quote_id = ? ORDER BY sort_order', [quote.id]);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=Angebot-${quote.quote_number}.pdf`);
-  generateAngebotPDF(quote, itemsRes.rows, res);
+  generateAngebotPDF(quote, itemsRes.rows, res, req.session.user?.company);
 }));
 
 router.get('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const qRes = await db.execute(`
     SELECT q.*, c.name as customer_name FROM quotes q
     LEFT JOIN customers c ON c.id = q.customer_id WHERE q.id = ?
@@ -127,6 +136,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const { date, valid_until, delivery_from, delivery_to, customer_id,
           order_number, notes, delivery_contact, cost_center, subject,
           item_name, item_qty, item_price } = req.body;
@@ -156,6 +166,7 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
 
 // ─── ZU RECHNUNG KONVERTIEREN ─────────────────────────────────────────────────
 router.post('/:id/zu-rechnung', w(async (req, res) => {
+  const db = req.db;
   const qRes = await db.execute(`
     SELECT q.*, c.name as customer_name FROM quotes q
     LEFT JOIN customers c ON c.id = q.customer_id WHERE q.id = ?
@@ -165,7 +176,7 @@ router.post('/:id/zu-rechnung', w(async (req, res) => {
 
   const itemsRes = await db.execute('SELECT * FROM quote_items WHERE quote_id = ? ORDER BY sort_order', [quote.id]);
   const lastInvRes = await db.execute('SELECT MAX(invoice_number) as max FROM invoices');
-  const nextInvNumber = (Number(lastInvRes.rows[0].max) || 247) + 1;
+  const nextInvNumber = (Number(lastInvRes.rows[0].max) || 0) + 1;
 
   const invRes = await db.execute(
     `INSERT INTO invoices (invoice_number, date, delivery_from, delivery_to, customer_id, order_number, notes, delivery_contact, cost_center, payment_method)
@@ -187,6 +198,7 @@ router.post('/:id/zu-rechnung', w(async (req, res) => {
 }));
 
 router.post('/:id/loeschen', w(async (req, res) => {
+  const db = req.db;
   const qRes = await db.execute('SELECT quote_number FROM quotes WHERE id = ?', [+req.params.id]);
   const quote = qRes.rows[0];
   if (!quote) { req.flash('error', 'Angebot nicht gefunden.'); return res.redirect('/angebote'); }
@@ -196,7 +208,7 @@ router.post('/:id/loeschen', w(async (req, res) => {
 }));
 
 // ─── HILFSFUNKTIONEN ──────────────────────────────────────────────────────────
-function queryQuotes({ search, sort = 'desc', year = 'all', period = 'all' }) {
+function queryQuotes(db, { search, sort = 'desc', year = 'all', period = 'all' }) {
   const order = sort === 'asc' ? 'ASC' : 'DESC';
   let sql = `
     SELECT q.id, q.quote_number, q.date, q.valid_until, q.delivery_from, q.delivery_to, q.order_number,

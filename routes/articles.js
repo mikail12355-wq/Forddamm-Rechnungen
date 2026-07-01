@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 
 router.get('/', async (req, res) => {
+  const db = req.db;
   const result = await db.execute('SELECT * FROM articles ORDER BY name');
   res.render('articles/index', { title: 'Artikel', articles: result.rows });
 });
@@ -12,6 +12,7 @@ router.get('/neu', (req, res) => {
 });
 
 router.post('/neu', async (req, res) => {
+  const db = req.db;
   const { name, unit_price } = req.body;
   const price = parseFloat(String(unit_price).replace(',', '.'));
   if (!name?.trim() || isNaN(price) || price <= 0) { req.flash('error', 'Name und gültiger Preis sind erforderlich.'); return res.redirect('/artikel/neu'); }
@@ -21,6 +22,7 @@ router.post('/neu', async (req, res) => {
 });
 
 router.get('/:id/bearbeiten', async (req, res) => {
+  const db = req.db;
   const result = await db.execute('SELECT * FROM articles WHERE id = ?', [+req.params.id]);
   const article = result.rows[0];
   if (!article) { req.flash('error', 'Artikel nicht gefunden.'); return res.redirect('/artikel'); }
@@ -28,6 +30,7 @@ router.get('/:id/bearbeiten', async (req, res) => {
 });
 
 router.post('/:id/bearbeiten', async (req, res) => {
+  const db = req.db;
   const { name, unit_price, active } = req.body;
   const price = parseFloat(String(unit_price).replace(',', '.'));
   if (!name?.trim() || isNaN(price) || price <= 0) { req.flash('error', 'Name und gültiger Preis sind erforderlich.'); return res.redirect(`/artikel/${req.params.id}/bearbeiten`); }
@@ -37,6 +40,7 @@ router.post('/:id/bearbeiten', async (req, res) => {
 });
 
 router.post('/:id/loeschen', async (req, res) => {
+  const db = req.db;
   const result = await db.execute('SELECT name FROM articles WHERE id = ?', [+req.params.id]);
   const article = result.rows[0];
   if (!article) { req.flash('error', 'Artikel nicht gefunden.'); return res.redirect('/artikel'); }

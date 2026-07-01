@@ -12,37 +12,55 @@ const C = {
   rowAlt: '#f9f5ef',
 };
 
-// Layout-Konstanten
 const W = 595.28, H = 841.89;
 const mL = 52, mR = 52;
-const cW = W - mL - mR;          // 491.28
+const cW = W - mL - mR;
 
-// Tabellenspalten
-const tA = mL;                    // Artikel         52
-const tM = mL + 228;              // Menge           280
-const tE = mL + 280;              // Einzelpreis     332
-const tG = mL + 388;              // Gesamtpreis     440
-const tR = mL + cW;               // rechter Rand    543.28
+const tA = mL;
+const tM = mL + 228;
+const tE = mL + 280;
+const tG = mL + 388;
+const tR = mL + cW;
 
 const ROW_H         = 21;
-const PAGE_BOTTOM   = H - 44;     // unterste Schreibgrenze (Footer ab H-40)
-const TOTALS_SPACE  = 165;        // Platz für Summen + Zahlungsinfos
+const PAGE_BOTTOM   = H - 44;
+const TOTALS_SPACE  = 165;
 
-// ─── Seitenfuss (jede Seite) ──────────────────────────────────────────────
-function drawFooter(doc) {
+// Standardwerte wenn kein company-Objekt übergeben wird (Bäckerei Forddamm)
+const DEFAULTS = {
+  name:       'Bäckerei Forddamm',
+  subtitle:   'Bäckerei & Café',
+  owner:      'Murat Öztürk',
+  street:     'Forddamm 13',
+  zip:        '12107',
+  city:       'Berlin',
+  iban:       'DE67 1005 0000 0191 3708 27',
+  bic:        'BELADEBXXX',
+  tax_number: '20/460/01995',
+  vat_rate:   0.07,
+};
+
+function getC(company) {
+  return { ...DEFAULTS, ...(company || {}) };
+}
+
+function drawFooter(doc, company) {
+  const c = getC(company);
   doc.rect(mL, H - 40, cW, 1).fill(C.border);
+  if (c.tax_number) {
+    doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
+       .text(`SteuerNr. ${c.tax_number}`, mL, H - 26, { lineBreak: false });
+  }
   doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 26,
+     .text(`${c.name}  ·  ${c.street}, ${c.zip} ${c.city}`, mL, H - 26,
            { width: cW, align: 'right', lineBreak: false });
 }
 
-// ─── Kopfzeile Folgeseiten ────────────────────────────────────────────────
-function drawContinuationHeader(doc, invoice) {
+function drawContinuationHeader(doc, invoice, company) {
+  const c = getC(company);
   const y0 = 36;
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(11)
-     .text('BÄCKEREI FORDDAMM', mL, y0, { lineBreak: false });
+     .text(c.name.toUpperCase(), mL, y0, { lineBreak: false });
   doc.fillColor(C.gray).font('Helvetica').fontSize(8.5)
      .text(`Rechnung Nr. ${invoice.invoice_number}  ·  Fortsetzung`,
            mL, y0, { width: cW, align: 'right', lineBreak: false });
@@ -51,7 +69,6 @@ function drawContinuationHeader(doc, invoice) {
   return lineY + 16;
 }
 
-// ─── Tabellenkopf ────────────────────────────────────────────────────────
 function drawTableHeader(doc, y) {
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7.5);
   doc.text('ARTIKEL',          tA,     y + 7, { lineBreak: false });
@@ -64,8 +81,11 @@ function drawTableHeader(doc, y) {
   return lineY + 6;
 }
 
-// ─── Hauptfunktion ───────────────────────────────────────────────────────
-function generatePDF(invoice, items, stream) {
+function generatePDF(invoice, items, stream, company) {
+  const c = getC(company);
+  const vatRate = c.vat_rate;
+  const vatLabel = `${Math.round(vatRate * 100)} %`;
+
   const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Rechnung Nr. ${invoice.invoice_number}` } });
   doc.pipe(stream);
 
@@ -73,9 +93,9 @@ function generatePDF(invoice, items, stream) {
 
   // ════ SEITE 1: HEADER ════════════════════════════════════════════════════
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(18)
-     .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
+     .text(c.name.toUpperCase(), mL, y, { lineBreak: false });
   doc.fillColor(C.gold).font('Helvetica').fontSize(8)
-     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
+     .text(`${c.owner}  ·  ${c.street}  ·  ${c.zip} ${c.city}`, mL, y + 24, { lineBreak: false });
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(8)
      .text('RECHNUNG', mL, y, { width: cW, align: 'right', lineBreak: false });
@@ -142,11 +162,10 @@ function generatePDF(invoice, items, stream) {
   let totalNetto = 0;
 
   items.forEach((item, idx) => {
-    // Seitenumbruch bei Bedarf
     if (y + ROW_H > PAGE_BOTTOM) {
-      drawFooter(doc);
+      drawFooter(doc, company);
       doc.addPage();
-      y = drawContinuationHeader(doc, invoice);
+      y = drawContinuationHeader(doc, invoice, company);
       y = drawTableHeader(doc, y);
     }
 
@@ -164,18 +183,17 @@ function generatePDF(invoice, items, stream) {
     y += ROW_H;
   });
 
-  // Untere Tabellenlinie
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 18;
 
-  // ════ SUMMEN – ggf. neue Seite ══════════════════════════════════════════
+  // ════ SUMMEN ══════════════════════════════════════════════════════════════
   if (y + TOTALS_SPACE > PAGE_BOTTOM) {
-    drawFooter(doc);
+    drawFooter(doc, company);
     doc.addPage();
-    y = drawContinuationHeader(doc, invoice);
+    y = drawContinuationHeader(doc, invoice, company);
   }
 
-  const ust         = totalNetto * 0.07;
+  const ust         = totalNetto * vatRate;
   const totalBrutto = totalNetto + ust;
   const sumValX     = tG;
   const sumValW     = tR - tG - 4;
@@ -187,7 +205,7 @@ function generatePDF(invoice, items, stream) {
   y += 17;
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
-     .text('+ 7 % USt', tE, y, { lineBreak: false });
+     .text(`+ ${vatLabel} USt`, tE, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(ust), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 14;
@@ -195,7 +213,6 @@ function generatePDF(invoice, items, stream) {
   doc.rect(tE, y, tR - tE, 1).fill(C.border);
   y += 10;
 
-  // Brutto mit goldenem Akzentstreifen
   doc.rect(tE - 6, y - 2, 3, 26).fill(C.gold);
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9)
      .text('Gesamtbetrag brutto', tE + 4, y + 1, { lineBreak: false });
@@ -215,7 +232,7 @@ function generatePDF(invoice, items, stream) {
     doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('ZAHLUNGSART', mL, y, { lineBreak: false });
     y += 11;
     doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(9).text('Barzahlung', mL, y, { lineBreak: false });
-  } else {
+  } else if (c.iban) {
     const p1 = mL, p2 = mL + 200, p3 = mL + 355;
     doc.fillColor(C.gray).font('Helvetica').fontSize(7);
     doc.text('IBAN',        p1, y, { lineBreak: false });
@@ -223,18 +240,19 @@ function generatePDF(invoice, items, stream) {
     doc.text('ZAHLUNGSART', p3, y, { lineBreak: false });
     y += 11;
     doc.fillColor(C.dark).font('Helvetica').fontSize(9);
-    doc.text('DE67 1005 0000 0191 3708 27', p1, y, { lineBreak: false });
-    doc.text('BELADEBXXX',                  p2, y, { lineBreak: false });
-    doc.text('Überweisung',                 p3, y, { lineBreak: false });
+    doc.text(c.iban,        p1, y, { lineBreak: false });
+    if (c.bic) doc.text(c.bic, p2, y, { lineBreak: false });
+    doc.text('Überweisung', p3, y, { lineBreak: false });
     y += 15;
     doc.fillColor(C.gray).font('Helvetica').fontSize(7).text('KONTOINHABER', p1, y, { lineBreak: false });
     y += 11;
-    doc.fillColor(C.dark).font('Helvetica').fontSize(9).text('Murat Öztürk', p1, y, { lineBreak: false });
+    doc.fillColor(C.dark).font('Helvetica').fontSize(9).text(c.owner, p1, y, { lineBreak: false });
+  } else {
+    doc.fillColor(C.gray).font('Helvetica').fontSize(9)
+       .text('Bankverbindung noch nicht hinterlegt.', mL, y, { lineBreak: false });
   }
 
-  // Seitenfuss letzte Seite
-  drawFooter(doc);
-
+  drawFooter(doc, company);
   doc.end();
 }
 

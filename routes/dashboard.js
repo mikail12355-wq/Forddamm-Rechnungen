@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 
 const MONTH_NAMES = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const QUARTER_MONTHS = { 1: ['01','02','03'], 2: ['04','05','06'], 3: ['07','08','09'], 4: ['10','11','12'] };
 
-// Gibt alle YYYY-MM Strings für einen Filterzeitraum zurück (null = alle)
 function buildMonatsList(year, quarter, month) {
   if (!year || year === 'all') return null;
   if (month) return [`${year}-${String(month).padStart(2, '0')}`];
@@ -13,9 +11,7 @@ function buildMonatsList(year, quarter, month) {
   return (qm || []).map(m => `${year}-${m}`);
 }
 
-// Berechnet Mitarbeiterkosten korrekt:
-// Für jeden Mitarbeiter gilt pro Monat: Override wenn vorhanden, sonst Standard-Gehalt
-async function calcMaKosten(monats) {
+async function calcMaKosten(db, monats) {
   const [maRes, overridesRes] = await Promise.all([
     db.execute('SELECT id, gehalt FROM mitarbeiter'),
     monats
@@ -32,7 +28,6 @@ async function calcMaKosten(monats) {
   const overrideMap = {};
   overridesRes.rows.forEach(r => { overrideMap[`${r.ma_id}:${r.monat}`] = r.betrag; });
 
-  // Berechne die Monatsliste: bei "Alle" alle Monate aus Rechnungen + Tageskasse verwenden
   let liste = monats;
   if (!liste) {
     const mRes = await db.execute(`
@@ -56,14 +51,15 @@ async function calcMaKosten(monats) {
 }
 
 router.get('/', async (req, res) => {
-  // Kein Filter gesetzt → aktuellen Monat als Standard
+  const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
+
   if (Object.keys(req.query).length === 0) {
     const now = new Date();
     return res.redirect(`/dashboard?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
   }
 
   const { year, month, quarter, all } = req.query;
-  // "Alle" explizit über ?all=1
 
   let whereParts = [];
   let args = [];
@@ -86,7 +82,6 @@ router.get('/', async (req, res) => {
   const cashWhere = where.replace(/i\.date/g, 'date');
   const monats    = buildMonatsList(year, quarter, month);
 
-  // Einkauf-Filter: billing_month wenn gesetzt, sonst pi.date
   const EFF = `COALESCE(NULLIF(pi.billing_month,''), strftime('%Y-%m', pi.date))`;
   let purchaseParts = [];
   let purchaseArgs  = [...args];
@@ -128,7 +123,7 @@ router.get('/', async (req, res) => {
     `, purchaseArgs),
   ]);
 
-  const maKosten = await calcMaKosten(monats);
+  const maKosten = await calcMaKosten(db, monats);
 
   const activeYear    = all ? 'all' : (year || 'all');
   const activeMonth   = (!all && month)   ? Number(month)   : null;
@@ -142,7 +137,7 @@ router.get('/', async (req, res) => {
   }
 
   const liefNetto     = Number(rev.rows[0].netto)       || 0;
-  const liefBrutto    = liefNetto * 1.07;
+  const liefBrutto    = liefNetto * (1 + vatRate);
   const ladenBrutto7  = Number(cashRes.rows[0].sum7)    || 0;
   const ladenBrutto19 = Number(cashRes.rows[0].sum19)   || 0;
   const ladenBrutto   = ladenBrutto7 + ladenBrutto19;
@@ -154,7 +149,7 @@ router.get('/', async (req, res) => {
   const einkaufKosten = Number(einkaufRes.rows[0].total) || 0;
   const gewinn        = gesamtEin - maKosten - einkaufKosten;
 
-  const ust_lieferung = liefNetto * 0.07;
+  const ust_lieferung = liefNetto * vatRate;
   const ust_kasse7    = ladenBrutto7  - ladenNetto7;
   const ust_kasse19   = ladenBrutto19 - ladenNetto19;
   const ust_gesamt    = ust_lieferung + ust_kasse7 + ust_kasse19;

@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', w(async (req, res) => {
+  const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
   const { year = 'all', period = 'all' } = req.query;
 
-  // Build date filters
   const invWhere  = [];
   const cashWhere = [];
   const invArgs   = [];
@@ -51,18 +51,15 @@ router.get('/', w(async (req, res) => {
     db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM daily_cash ORDER BY y DESC"),
   ]);
 
-  // Merge year lists
   const yearSet = new Set([
     ...yearsInvRes.rows.map(r => r.y),
     ...yearsCashRes.rows.map(r => r.y)
   ].filter(Boolean));
   const years = [...yearSet].sort((a, b) => b - a);
 
-  // Lieferungen (outgoing invoices)
   const liefNetto  = Number(invRes.rows[0]?.netto)     || 0;
-  const liefBrutto = liefNetto * 1.07;
+  const liefBrutto = liefNetto * (1 + vatRate);
 
-  // Tageskasse
   const sumR7       = Number(cashRes.rows[0]?.sum_r7)    || 0;
   const sumR19      = Number(cashRes.rows[0]?.sum_r19)   || 0;
   const sumLotto    = Number(cashRes.rows[0]?.sum_lotto) || 0;
@@ -71,7 +68,6 @@ router.get('/', w(async (req, res) => {
   const ladenUst7   = sumR7  - sumR7  / 1.07;
   const ladenUst19  = sumR19 - sumR19 / 1.19;
 
-  // Gesamt (Lotto already excluded from Laden figures)
   const gesamtBrutto = liefBrutto + ladenBrutto;
   const gesamtNetto  = liefNetto  + ladenNetto;
 

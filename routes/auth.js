@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { db } = require('../db');
+const { masterDb } = require('../db');
 
 router.get('/login', (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
@@ -10,7 +10,7 @@ router.get('/login', (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+  const result = await masterDb.execute('SELECT * FROM users WHERE username = ?', [username]);
   const user = result.rows[0];
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
@@ -18,7 +18,15 @@ router.post('/login', async (req, res) => {
     return res.redirect('/login');
   }
 
-  req.session.user = { id: Number(user.id), username: user.username };
+  const companyRes = await masterDb.execute('SELECT * FROM companies WHERE id = ?', [user.company_id || 1]);
+  const company = companyRes.rows[0] || null;
+
+  req.session.user = {
+    id: Number(user.id),
+    username: user.username,
+    company_id: user.company_id || 1,
+    company,
+  };
   res.redirect('/dashboard');
 });
 
@@ -35,7 +43,7 @@ router.post('/passwort', async (req, res) => {
   if (!req.session.user) return res.redirect('/login');
   const { current, newpass, confirm } = req.body;
 
-  const result = await db.execute('SELECT * FROM users WHERE id = ?', [req.session.user.id]);
+  const result = await masterDb.execute('SELECT * FROM users WHERE id = ?', [req.session.user.id]);
   const user = result.rows[0];
 
   if (!bcrypt.compareSync(current, user.password_hash)) {
@@ -52,7 +60,7 @@ router.post('/passwort', async (req, res) => {
   }
 
   const hash = bcrypt.hashSync(newpass, 10);
-  await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
+  await masterDb.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
   req.flash('success', 'Passwort erfolgreich geändert.');
   res.redirect('/dashboard');
 });

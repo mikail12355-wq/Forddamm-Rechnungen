@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
-const { db } = require('../db');
 
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -11,7 +10,7 @@ function parseDE(val) {
   return parseFloat(String(val || '0').replace(',', '.')) || 0;
 }
 
-function buildQuery({ year, month }) {
+function buildQuery(db, { year, month }) {
   let sql = 'SELECT * FROM daily_cash';
   const args = [];
   const where = [];
@@ -24,10 +23,11 @@ function buildQuery({ year, month }) {
 
 // ─── LISTE ───────────────────────────────────────────────────────────────────
 router.get('/', w(async (req, res) => {
+  const db = req.db;
   const { year = 'all', month = 'all' } = req.query;
 
   const [rows, yearsRes] = await Promise.all([
-    buildQuery({ year, month }),
+    buildQuery(db, { year, month }),
     db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM daily_cash ORDER BY y DESC")
   ]);
 
@@ -53,6 +53,7 @@ router.get('/neu', w(async (req, res) => {
 }));
 
 router.post('/neu', w(async (req, res) => {
+  const db = req.db;
   const { date, revenue_7, revenue_19, lotto_revenue, notes } = req.body;
   if (!date) {
     req.flash('error', 'Datum ist ein Pflichtfeld.');
@@ -77,6 +78,7 @@ router.post('/neu', w(async (req, res) => {
 
 // ─── BEARBEITEN ───────────────────────────────────────────────────────────────
 router.get('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const r = await db.execute('SELECT * FROM daily_cash WHERE id = ?', [+req.params.id]);
   const entry = r.rows[0];
   if (!entry) { req.flash('error', 'Eintrag nicht gefunden.'); return res.redirect('/tageskasse'); }
@@ -84,6 +86,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const { date, revenue_7, revenue_19, lotto_revenue, notes } = req.body;
   const r7    = parseDE(revenue_7);
   const r19   = parseDE(revenue_19);
@@ -99,12 +102,13 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
 
 // ─── LÖSCHEN ─────────────────────────────────────────────────────────────────
 router.post('/:id/loeschen', w(async (req, res) => {
+  const db = req.db;
   await db.execute('DELETE FROM daily_cash WHERE id = ?', [+req.params.id]);
   req.flash('success', 'Eintrag gelöscht.');
   res.redirect('/tageskasse');
 }));
 
-// ─── Farben & Hilfsfunktionen (Kassenbericht) ────────────────────────────────
+// ─── PDF-Hilfsfunktionen (Kassenbericht) ─────────────────────────────────────
 const KB_C = {
   dark:   '#2b1e0f',
   gold:   '#c8913a',
@@ -116,18 +120,20 @@ const KB_C = {
 };
 const KB_W = 595.28, KB_H = 841.89;
 const KB_ML = 52, KB_MR = 52;
-const KB_CW = KB_W - KB_ML - KB_MR;   // 491.28
-const KB_DAYS_DE   = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'];
+const KB_CW = KB_W - KB_ML - KB_MR;
 const KB_DAYS_FULL = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
 
-// Kompakter Header — gibt Startposition der Tabelle zurück (~102px)
-function kbHeader(doc, title, subtitle, note) {
+function kbHeader(doc, title, subtitle, note, company) {
   const mL = KB_ML, cW = KB_CW;
+  const companyName = company?.name?.toUpperCase() || 'BÄCKEREI FORDDAMM';
+  const companyLine = company
+    ? `${company.owner}  ·  ${company.street}  ·  ${company.zip} ${company.city}`
+    : 'Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin';
   let y = 36;
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(16)
-     .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
+     .text(companyName, mL, y, { lineBreak: false });
   doc.fillColor(KB_C.gold).font('Helvetica').fontSize(7.5)
-     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 18, { lineBreak: false });
+     .text(companyLine, mL, y + 18, { lineBreak: false });
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
      .text('KASSENBERICHT', mL, y, { width: cW, align: 'right', lineBreak: false });
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(18)
@@ -144,21 +150,28 @@ function kbHeader(doc, title, subtitle, note) {
        .text(note, mL + 230, y + 2, { lineBreak: false });
   }
   y += 18;
-  return y; // ~102
+  return y;
 }
 
-function kbFooter(doc) {
+function kbFooter(doc, company) {
   const mL = KB_ML, cW = KB_CW, H = KB_H;
+  const taxLine = company?.tax_number ? `SteuerNr. ${company.tax_number}` : '';
+  const addrLine = company
+    ? `${company.name}  ·  ${company.street}, ${company.zip} ${company.city}`
+    : 'Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin';
   doc.rect(mL, H - 40, cW, 1).fill(KB_C.border);
+  if (taxLine) {
+    doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
+       .text(taxLine, mL, H - 26, { lineBreak: false });
+  }
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
-     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
-  doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
-     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin',
-           mL, H - 26, { width: cW, align: 'right', lineBreak: false });
+     .text(addrLine, mL, H - 26, { width: cW, align: 'right', lineBreak: false });
 }
 
 // ─── KASSENBERICHT LOTTO (PDF) ───────────────────────────────────────────────
 router.get('/kassenbericht-lotto', w(async (req, res) => {
+  const db = req.db;
+  const company = req.session.user?.company;
   const { year, month } = req.query;
   if (!year || year === 'all' || !month || month === 'all') {
     req.flash('error', 'Bitte wählen Sie ein konkretes Jahr und einen Monat aus.');
@@ -185,12 +198,11 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   doc.pipe(res);
 
   const mL      = KB_ML, cW = KB_CW;
-  const colWday = mL + 88;  // Wochentag-Spalte
+  const colWday = mL + 88;
   const ROW_H   = 16;
 
-  let y = kbHeader(doc, 'LOTTO', `${monthName} ${yearNum}`);
+  let y = kbHeader(doc, 'LOTTO', `${monthName} ${yearNum}`, null, company);
 
-  // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7.5);
   doc.text('DATUM',     mL + 6,  y + 6, { lineBreak: false });
@@ -200,7 +212,6 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
 
-  // Tageszeilen
   let idx = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const e = dayMap[day];
@@ -225,11 +236,9 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     idx++;
   }
 
-  // Abschlusslinie
   doc.rect(mL, y, cW, 1).fill(KB_C.border);
   y += 12;
 
-  // Gesamtbetrag
   const accentColor = totalLotto >= 0 ? KB_C.gold : '#27ae60';
   doc.rect(mL, y, 3, 26).fill(accentColor);
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(8.5)
@@ -239,14 +248,15 @@ router.get('/kassenbericht-lotto', w(async (req, res) => {
     : '− ' + Math.abs(totalLotto).toFixed(2).replace('.', ',') + ' € (Guthaben)';
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(15)
      .text(totalLabel, mL, y, { width: cW - 6, align: 'right', lineBreak: false });
-  y += 30;
 
-  kbFooter(doc);
+  kbFooter(doc, company);
   doc.end();
 }));
 
 // ─── KASSENBERICHT LADEN ohne Lotto (PDF) ────────────────────────────────────
 router.get('/kassenbericht-laden', w(async (req, res) => {
+  const db = req.db;
+  const company = req.session.user?.company;
   const { year, month } = req.query;
   if (!year || year === 'all' || !month || month === 'all') {
     req.flash('error', 'Bitte wählen Sie ein konkretes Jahr und einen Monat aus.');
@@ -274,16 +284,14 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   doc.pipe(res);
 
   const mL      = KB_ML, cW = KB_CW;
-  // Spalten: Datum | Wochentag | 7% brutto | 19% brutto | Gesamt
-  const colWday = mL + 82;   // Wochentag-Spalte
-  const col7RE  = mL + 320;  // rechter Rand 7%-Spalte
-  const col19RE = mL + 415;  // rechter Rand 19%-Spalte
+  const colWday = mL + 82;
+  const col7RE  = mL + 320;
+  const col19RE = mL + 415;
   const ROW_H   = 15;
   const EUR     = n => Number(n).toFixed(2).replace('.', ',') + ' €';
 
-  let y = kbHeader(doc, 'LADEN', `${monthName} ${yearNum}`, 'ohne Lotto-Umsatz');
+  let y = kbHeader(doc, 'LADEN', `${monthName} ${yearNum}`, 'ohne Lotto-Umsatz', company);
 
-  // Tabellenkopf
   doc.rect(mL, y, cW, 20).fill(KB_C.bg);
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7);
   doc.text('DATUM',       mL + 6,  y + 6, { lineBreak: false });
@@ -295,7 +303,6 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
   doc.rect(mL, y, cW, 1).fill(KB_C.gold);
   y += 1;
 
-  // Tageszeilen — nur Tage mit Laden-Umsatz
   let idx = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const e = dayMap[day];
@@ -320,24 +327,18 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
     idx++;
   }
 
-  // Abschlusslinie
   doc.rect(mL, y, cW, 1).fill(KB_C.border);
   y += 6;
 
-  // ─── Summen-Block (kompakt, alles auf einer Seite) ────────────────────────
-  const SH = 13; // Zeilenhöhe im Summen-Block
-
-  // Hintergrund für Summen-Zeilen
+  const SH = 13;
   doc.rect(mL, y, cW, SH * 4 + 10).fill(KB_C.bg);
 
-  // Zeile A: 7% brutto
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7)
      .text('7 % UMSATZ BRUTTO', mL + 6, y + 3, { lineBreak: false });
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(8.5)
      .text(EUR(sumR7), mL, y + 3, { width: cW - 6, align: 'right', lineBreak: false });
   y += SH;
 
-  // Zeile B: 7% netto + MwSt
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
      .text('Netto (÷ 1,07)', mL + 14, y + 2, { lineBreak: false });
   doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
@@ -349,14 +350,12 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
            { width: mL + cW - col19RE - 12, align: 'right', lineBreak: false });
   y += SH + 4;
 
-  // Zeile C: 19% brutto
   doc.fillColor(KB_C.gold).font('Helvetica-Bold').fontSize(7)
      .text('19 % UMSATZ BRUTTO', mL + 6, y + 3, { lineBreak: false });
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(8.5)
      .text(EUR(sumR19), mL, y + 3, { width: cW - 6, align: 'right', lineBreak: false });
   y += SH;
 
-  // Zeile D: 19% netto + MwSt
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
      .text('Netto (÷ 1,19)', mL + 14, y + 2, { lineBreak: false });
   doc.fillColor(KB_C.mid).font('Helvetica').fontSize(8)
@@ -368,11 +367,9 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
            { width: mL + cW - col19RE - 12, align: 'right', lineBreak: false });
   y += SH + 10;
 
-  // Trennlinie vor Gesamt
   doc.rect(mL, y, cW, 1.5).fill(KB_C.border);
   y += 10;
 
-  // Gesamtumsatz mit Gold-Akzent
   doc.rect(mL, y, 3, 26).fill(KB_C.gold);
   doc.fillColor(KB_C.dark).font('Helvetica-Bold').fontSize(8.5)
      .text('GESAMTUMSATZ LADEN (BRUTTO)', mL + 10, y + 2, { lineBreak: false });
@@ -380,7 +377,6 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
      .text(EUR(sumR7 + sumR19), mL, y, { width: cW - 6, align: 'right', lineBreak: false });
   y += 18;
 
-  // Netto + MwSt-Gesamt
   doc.fillColor(KB_C.gray).font('Helvetica').fontSize(7.5)
      .text(
        `Gesamtnetto: ${EUR(sumR7 / 1.07 + sumR19 / 1.19)}` +
@@ -389,7 +385,7 @@ router.get('/kassenbericht-laden', w(async (req, res) => {
        mL + 10, y, { lineBreak: false }
      );
 
-  kbFooter(doc);
+  kbFooter(doc, company);
   doc.end();
 }));
 

@@ -5,7 +5,7 @@ const MemoryStore = require('memorystore')(session);
 const flash = require('connect-flash');
 const ejsLayouts = require('express-ejs-layouts');
 const path = require('path');
-const { initDB } = require('./db');
+const { initDB, getCompanyDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +32,10 @@ app.use((req, res, next) => {
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.user = req.session.user || null;
+  res.locals.company = req.session.user?.company || null;
+  if (req.session.user?.company_id) {
+    req.db = getCompanyDb(req.session.user.company_id);
+  }
   next();
 });
 
@@ -50,6 +54,7 @@ app.use('/tageskasse',  requireAuth, require('./routes/tageskasse'));
 app.use('/uebersicht',  requireAuth, require('./routes/uebersicht'));
 app.use('/mitarbeiter', requireAuth, require('./routes/mitarbeiter'));
 app.use('/angebote',   requireAuth, require('./routes/angebote'));
+app.use('/api',        require('./routes/api'));
 
 app.get('/', (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');

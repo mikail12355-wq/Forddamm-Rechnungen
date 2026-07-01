@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', w(async (req, res) => {
+  const db = req.db;
   const result = await db.execute('SELECT * FROM customers ORDER BY name');
   res.render('customers/index', { title: 'Kunden', customers: result.rows });
 }));
@@ -14,6 +14,7 @@ router.get('/neu', (req, res) => {
 });
 
 router.post('/neu', w(async (req, res) => {
+  const db = req.db;
   const { name, billing_name, billing_street, billing_zip, billing_city, delivery_name, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
   if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect('/kunden/neu'); }
 
@@ -22,12 +23,13 @@ router.post('/neu', w(async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [name.trim(), billing_name||'', billing_street||'', billing_zip||'', billing_city||'', delivery_name||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'']
   );
-  await saveCustomerPrices(Number(custRes.lastInsertRowid), req.body);
+  await saveCustomerPrices(db, Number(custRes.lastInsertRowid), req.body);
   req.flash('success', `Kunde "${name}" wurde angelegt.`);
   res.redirect('/kunden');
 }));
 
 router.get('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const [custRes, artRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers WHERE id = ?', [+req.params.id]),
     db.execute('SELECT * FROM articles ORDER BY name'),
@@ -39,6 +41,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const { name, billing_name, billing_street, billing_zip, billing_city, delivery_name, delivery_street, delivery_zip, delivery_city, cost_center } = req.body;
   if (!name?.trim()) { req.flash('error', 'Name ist erforderlich.'); return res.redirect(`/kunden/${req.params.id}/bearbeiten`); }
 
@@ -46,12 +49,13 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
     `UPDATE customers SET name=?, billing_name=?, billing_street=?, billing_zip=?, billing_city=?, delivery_name=?, delivery_street=?, delivery_zip=?, delivery_city=?, cost_center=? WHERE id=?`,
     [name.trim(), billing_name||'', billing_street||'', billing_zip||'', billing_city||'', delivery_name||'', delivery_street||'', delivery_zip||'', delivery_city||'', cost_center||'', +req.params.id]
   );
-  await saveCustomerPrices(+req.params.id, req.body);
+  await saveCustomerPrices(db, +req.params.id, req.body);
   req.flash('success', `Kunde "${name}" aktualisiert.`);
   res.redirect('/kunden');
 }));
 
 router.post('/:id/loeschen', w(async (req, res) => {
+  const db = req.db;
   const custRes = await db.execute('SELECT name FROM customers WHERE id = ?', [+req.params.id]);
   const customer = custRes.rows[0];
   if (!customer) { req.flash('error', 'Kunde nicht gefunden.'); return res.redirect('/kunden'); }
@@ -67,11 +71,12 @@ router.post('/:id/loeschen', w(async (req, res) => {
 }));
 
 router.get('/api/:id', w(async (req, res) => {
+  const db = req.db;
   const result = await db.execute('SELECT * FROM customers WHERE id = ?', [+req.params.id]);
   res.json(result.rows[0] || null);
 }));
 
-async function saveCustomerPrices(customerId, body) {
+async function saveCustomerPrices(db, customerId, body) {
   const artRes = await db.execute('SELECT id FROM articles');
   const stmts = [{ sql: 'DELETE FROM customer_prices WHERE customer_id = ?', args: [customerId] }];
   for (const article of artRes.rows) {

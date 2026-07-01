@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
 const multer = require('multer');
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 const path = require('path');
@@ -43,7 +42,6 @@ const scanUpload = multer({
   }
 });
 
-// Serve uploaded PDFs
 router.get('/uploads/:filename', (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(UPLOADS_DIR, filename);
@@ -51,8 +49,8 @@ router.get('/uploads/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Product list grouped by supplier → category (with canonical name support)
 router.get('/produkte', async (req, res) => {
+  const db = req.db;
   const rows = await db.execute(`
     SELECT pit.product_name, pit.unit, pit.unit_price, pit.line_total, pit.quantity,
            pit.category, s.name as supplier_name, pi.date, pi.id as invoice_id,
@@ -64,7 +62,6 @@ router.get('/produkte', async (req, res) => {
     ORDER BY s.name ASC, pit.category ASC, display_name ASC, pi.date DESC
   `);
 
-  // Group: supplier_name → category → display_name → { displayName, originalNames[], hasAlias, entries[] }
   const bySupplier = {};
   rows.rows.forEach(row => {
     const sup = row.supplier_name || 'Unbekannt';
@@ -83,8 +80,8 @@ router.get('/produkte', async (req, res) => {
   res.render('einkauf/produkte', { title: 'Einkauf – Produkte', bySupplier, supplierNames });
 });
 
-// Set / remove canonical alias for one or more product names
 router.post('/produkte/alias', async (req, res) => {
+  const db = req.db;
   const names  = Array.isArray(req.body.product_names) ? req.body.product_names : (req.body.product_names ? [req.body.product_names] : []);
   const alias  = (req.body.canonical_name || '').trim();
   for (const name of names) {
@@ -101,13 +98,12 @@ router.post('/produkte/alias', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Scan form
 router.get('/scan', (req, res) => {
   res.render('einkauf/scan', { title: 'Einkauf – Rechnung scannen' });
 });
 
-// Process scan with Claude AI
 router.post('/scan', scanUpload.array('scan_files', 10), async (req, res) => {
+  const db = req.db;
   const files = req.files || [];
   if (!files.length) {
     req.flash('error', 'Keine Datei hochgeladen.');
@@ -136,8 +132,8 @@ router.post('/scan', scanUpload.array('scan_files', 10), async (req, res) => {
   }
 });
 
-// Price comparison
 router.get('/preisvergleich', async (req, res) => {
+  const db = req.db;
   const items = await db.execute(`
     SELECT pit.product_name, pit.quantity, pit.unit, pit.unit_price,
            s.name as supplier_name, pi.date, pi.id as invoice_id
@@ -157,8 +153,8 @@ router.get('/preisvergleich', async (req, res) => {
   res.render('einkauf/preisvergleich', { title: 'Einkauf – Preisvergleich', grouped });
 });
 
-// List
 router.get('/', async (req, res) => {
+  const db = req.db;
   const invoices = await db.execute(`
     SELECT pi.*, s.name as supplier_name,
            COUNT(pit.id) as item_count,
@@ -172,8 +168,8 @@ router.get('/', async (req, res) => {
   res.render('einkauf/index', { title: 'Einkauf', invoices: invoices.rows });
 });
 
-// New form
 router.get('/neu', async (req, res) => {
+  const db = req.db;
   const suppliers = await db.execute('SELECT * FROM suppliers ORDER BY name');
   const today = new Date().toISOString().split('T')[0];
   res.render('einkauf/form', {
@@ -182,8 +178,8 @@ router.get('/neu', async (req, res) => {
   });
 });
 
-// Create
 router.post('/neu', upload.single('pdf'), async (req, res) => {
+  const db = req.db;
   const { supplier_name, invoice_number, date, notes, item_name, item_qty, item_unit, item_price,
           billing_year, billing_month_num } = req.body;
 
@@ -238,8 +234,8 @@ router.post('/neu', upload.single('pdf'), async (req, res) => {
   res.redirect('/einkauf');
 });
 
-// Detail view
 router.get('/:id', async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute(`
     SELECT pi.*, s.name as supplier_name
     FROM purchase_invoices pi
@@ -260,8 +256,8 @@ router.get('/:id', async (req, res) => {
   });
 });
 
-// Edit form
 router.get('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute(`
     SELECT pi.*, s.name as supplier_name
     FROM purchase_invoices pi LEFT JOIN suppliers s ON pi.supplier_id = s.id
@@ -286,8 +282,8 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
   });
 }));
 
-// Save edit
 router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
+  const db = req.db;
   const { supplier_name, invoice_number, date, notes, billing_year, billing_month_num,
           item_name, item_qty, item_unit, item_price } = req.body;
 
@@ -308,7 +304,6 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
     supplierId = Number(ins.lastInsertRowid);
   }
 
-  // Altes PDF behalten wenn kein neues hochgeladen
   let pdfFilename;
   if (req.file) {
     const old = await db.execute('SELECT pdf_filename FROM purchase_invoices WHERE id = ?', [+req.params.id]);
@@ -325,7 +320,6 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
      billingMonth, +req.params.id]
   );
 
-  // Positionen neu setzen
   await db.execute('DELETE FROM purchase_items WHERE purchase_invoice_id = ?', [+req.params.id]);
   const { CATEGORIES } = require('../services/ocr');
   const names      = Array.isArray(item_name)  ? item_name  : (item_name  ? [item_name]  : []);
@@ -354,8 +348,8 @@ router.post('/:id/bearbeiten', upload.single('pdf'), w(async (req, res) => {
   res.redirect(`/einkauf/${req.params.id}`);
 }));
 
-// Delete
 router.post('/:id/loeschen', async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute(`
     SELECT pi.*, s.name as supplier_name
     FROM purchase_invoices pi

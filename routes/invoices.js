@@ -2,19 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { PassThrough } = require('stream');
 const archiver = require('archiver');
-const { db } = require('../db');
 const generatePDF = require('../services/pdf');
 
-// Express 4 fängt async-Fehler NICHT automatisch ab — dieser Wrapper
-// leitet jeden unbehandelten Fehler an den globalen Error-Handler weiter
-// statt den Request hängen zu lassen.
 const w = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 // ─── LISTE ────────────────────────────────────────────────────────────────────
 router.get('/', w(async (req, res) => {
+  const db = req.db;
   const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
   const [result, yearsRes] = await Promise.all([
-    queryInvoices({ search, sort, status, year, period }),
+    queryInvoices(db, { search, sort, status, year, period }),
     db.execute("SELECT DISTINCT strftime('%Y', date) as y FROM invoices ORDER BY y DESC")
   ]);
   const years = yearsRes.rows.map(r => r.y).filter(Boolean);
@@ -26,8 +23,9 @@ router.get('/', w(async (req, res) => {
 
 // ─── ZIP-EXPORT ───────────────────────────────────────────────────────────────
 router.get('/export', w(async (req, res) => {
+  const db = req.db;
   const { search, sort = 'desc', status = 'all', year = 'all', period = 'all' } = req.query;
-  const listResult = await queryInvoices({ search, sort, status, year, period });
+  const listResult = await queryInvoices(db, { search, sort, status, year, period });
   const invRows = listResult.rows;
 
   if (invRows.length === 0) {
@@ -64,7 +62,7 @@ router.get('/export', w(async (req, res) => {
   if (status === 'open') parts.push('Offen');
   const zipName = parts.join('-') + '.zip';
 
-  // PDFs einzeln als Buffer erzeugen (sequenziell — verhindert Speicher/Stream-Deadlocks)
+  const company = req.session.user?.company;
   const pdfBuffers = [];
   for (const invoice of fullRes.rows) {
     const items = itemsByInvoice[invoice.id] || [];
@@ -74,7 +72,7 @@ router.get('/export', w(async (req, res) => {
       pt.on('data',  chunk => chunks.push(chunk));
       pt.on('end',   () => resolve(Buffer.concat(chunks)));
       pt.on('error', reject);
-      generatePDF(invoice, items, pt);
+      generatePDF(invoice, items, pt, company);
     });
     pdfBuffers.push({ name: `Rechnung-${invoice.invoice_number}.pdf`, buf });
   }
@@ -91,13 +89,14 @@ router.get('/export', w(async (req, res) => {
 
 // ─── NEUE RECHNUNG ────────────────────────────────────────────────────────────
 router.get('/neu', w(async (req, res) => {
+  const db = req.db;
   const [custRes, artRes, lastRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
     db.execute('SELECT MAX(invoice_number) as max FROM invoices'),
     db.execute('SELECT customer_id, article_id, unit_price FROM customer_prices')
   ]);
-  const nextNumber = (Number(lastRes.rows[0].max) || 247) + 1;
+  const nextNumber = (Number(lastRes.rows[0].max) || 0) + 1;
   const today = new Date().toISOString().split('T')[0];
   res.render('invoices/new', {
     title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows,
@@ -107,6 +106,7 @@ router.get('/neu', w(async (req, res) => {
 }));
 
 router.post('/neu', w(async (req, res) => {
+  const db = req.db;
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
           order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price,
           payment_method } = req.body;
@@ -146,6 +146,8 @@ router.post('/neu', w(async (req, res) => {
 
 // ─── EINZELNE RECHNUNG ────────────────────────────────────────────────────────
 router.get('/:id', w(async (req, res) => {
+  const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
@@ -157,11 +159,15 @@ router.get('/:id', w(async (req, res) => {
   const itemsRes = await db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]);
   const items = itemsRes.rows;
   const totalNetto = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
-  const ust = totalNetto * 0.07;
-  res.render('invoices/view', { title: `Rechnung Nr. ${invoice.invoice_number}`, invoice, items, totalNetto, ust, totalBrutto: totalNetto + ust });
+  const ust = totalNetto * vatRate;
+  res.render('invoices/view', {
+    title: `Rechnung Nr. ${invoice.invoice_number}`, invoice, items,
+    totalNetto, ust, totalBrutto: totalNetto + ust, vatRate
+  });
 }));
 
 router.get('/:id/pdf', w(async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name, c.billing_name, c.billing_street, c.billing_zip, c.billing_city,
       c.delivery_name, c.delivery_street, c.delivery_zip, c.delivery_city
@@ -173,10 +179,11 @@ router.get('/:id/pdf', w(async (req, res) => {
   const itemsRes = await db.execute('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order', [invoice.id]);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=Rechnung-${invoice.invoice_number}.pdf`);
-  generatePDF(invoice, itemsRes.rows, res);
+  generatePDF(invoice, itemsRes.rows, res, req.session.user?.company);
 }));
 
 router.get('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
@@ -199,6 +206,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/bearbeiten', w(async (req, res) => {
+  const db = req.db;
   const { invoice_number, date, delivery_from, delivery_to, customer_id,
           order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price,
           payment_method } = req.body;
@@ -227,6 +235,7 @@ router.post('/:id/bearbeiten', w(async (req, res) => {
 }));
 
 router.post('/:id/zahlung', w(async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute('SELECT paid FROM invoices WHERE id = ?', [+req.params.id]);
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
@@ -237,6 +246,7 @@ router.post('/:id/zahlung', w(async (req, res) => {
 }));
 
 router.post('/:id/loeschen', w(async (req, res) => {
+  const db = req.db;
   const invRes = await db.execute('SELECT invoice_number FROM invoices WHERE id = ?', [+req.params.id]);
   const invoice = invRes.rows[0];
   if (!invoice) { req.flash('error', 'Rechnung nicht gefunden.'); return res.redirect('/rechnungen'); }
@@ -246,7 +256,7 @@ router.post('/:id/loeschen', w(async (req, res) => {
 }));
 
 // ─── HILFSFUNKTIONEN ──────────────────────────────────────────────────────────
-function queryInvoices({ search, sort = 'desc', status = 'all', year = 'all', period = 'all' }) {
+function queryInvoices(db, { search, sort = 'desc', status = 'all', year = 'all', period = 'all' }) {
   const order = sort === 'asc' ? 'ASC' : 'DESC';
   let sql = `
     SELECT i.id, i.invoice_number, i.date, i.delivery_from, i.delivery_to, i.order_number,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= title %> — Bäckerei Forddamm</title>
+  <title><%= title %> — <%= locals.company?.name || 'Rechnungsverwaltung' %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
@@ -15,7 +15,7 @@
   <button class="hamburger-btn" id="hamburger-btn" aria-label="Menü öffnen">
     <span></span><span></span><span></span>
   </button>
-  <span class="mobile-topbar-title">🥖 Forddamm</span>
+  <span class="mobile-topbar-title"><%= locals.company?.emoji || '🏪' %> <%= locals.company?.name || 'Rechnungen' %></span>
   <a href="/rechnungen/neu" class="btn-primary" style="padding:6px 14px;font-size:0.8rem">+ Rechnung</a>
 </div>
 
@@ -24,10 +24,10 @@
 
 <aside class="sidebar">
   <div class="sidebar-header">
-    <span class="sidebar-logo">🥖</span>
+    <span class="sidebar-logo"><%= locals.company?.emoji || '🏪' %></span>
     <div>
-      <div class="sidebar-title">Forddamm</div>
-      <div class="sidebar-sub">Rechnungsverwaltung</div>
+      <div class="sidebar-title"><%= locals.company?.name || 'Rechnungen' %></div>
+      <div class="sidebar-sub"><%= locals.company?.subtitle || 'Rechnungsverwaltung' %></div>
     </div>
   </div>
 

@@ -26,19 +26,38 @@ const ROW_H        = 21;
 const PAGE_BOTTOM  = H - 44;
 const TOTALS_SPACE = 120;
 
-function drawFooter(doc) {
+const DEFAULTS = {
+  name:       'Bäckerei Forddamm',
+  subtitle:   'Bäckerei & Café',
+  owner:      'Murat Öztürk',
+  street:     'Forddamm 13',
+  zip:        '12107',
+  city:       'Berlin',
+  tax_number: '20/460/01995',
+  vat_rate:   0.07,
+};
+
+function getC(company) {
+  return { ...DEFAULTS, ...(company || {}) };
+}
+
+function drawFooter(doc, company) {
+  const c = getC(company);
   doc.rect(mL, H - 40, cW, 1).fill(C.border);
+  if (c.tax_number) {
+    doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
+       .text(`SteuerNr. ${c.tax_number}`, mL, H - 26, { lineBreak: false });
+  }
   doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('SteuerNr. 20/460/01995', mL, H - 26, { lineBreak: false });
-  doc.fillColor(C.gray).font('Helvetica').fontSize(7.5)
-     .text('Bäckerei & Café Forddamm  ·  Forddamm 13, 12107 Berlin', mL, H - 26,
+     .text(`${c.name}  ·  ${c.street}, ${c.zip} ${c.city}`, mL, H - 26,
            { width: cW, align: 'right', lineBreak: false });
 }
 
-function drawContinuationHeader(doc, quote) {
+function drawContinuationHeader(doc, quote, company) {
+  const c = getC(company);
   const y0 = 36;
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(11)
-     .text('BÄCKEREI FORDDAMM', mL, y0, { lineBreak: false });
+     .text(c.name.toUpperCase(), mL, y0, { lineBreak: false });
   doc.fillColor(C.gray).font('Helvetica').fontSize(8.5)
      .text('Angebot  ·  Fortsetzung', mL, y0, { width: cW, align: 'right', lineBreak: false });
   const lineY = y0 + 19;
@@ -58,23 +77,27 @@ function drawTableHeader(doc, y) {
   return lineY + 6;
 }
 
-function generateAngebotPDF(quote, items, stream) {
+function generateAngebotPDF(quote, items, stream, company) {
+  const c = getC(company);
+  const vatRate = c.vat_rate;
+  const vatLabel = `${Math.round(vatRate * 100)} %`;
+
   const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: 'Angebot' } });
   doc.pipe(stream);
 
   let y = 44;
 
-  // ════ HEADER ═════════════════════════════════════════════════════════════════
+  // ════ HEADER ═════════════════════════════════════════════════════════════
   doc.fillColor(C.dark).font('Helvetica-Bold').fontSize(18)
-     .text('BÄCKEREI FORDDAMM', mL, y, { lineBreak: false });
+     .text(c.name.toUpperCase(), mL, y, { lineBreak: false });
   doc.fillColor(C.gold).font('Helvetica').fontSize(8)
-     .text('Murat Öztürk  ·  Forddamm 13  ·  12107 Berlin', mL, y + 24, { lineBreak: false });
+     .text(`${c.owner}  ·  ${c.street}  ·  ${c.zip} ${c.city}`, mL, y + 24, { lineBreak: false });
 
   y += 50;
   doc.rect(mL, y, cW, 1.5).fill(C.gold);
   y += 20;
 
-  // ════ ADRESSEN ═══════════════════════════════════════════════════════════════
+  // ════ ADRESSEN ═══════════════════════════════════════════════════════════
   const c1 = mL, c2 = mL + cW * 0.44;
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(7)
      .text('RECHNUNGSADRESSE', c1, y, { lineBreak: false })
@@ -103,7 +126,7 @@ function generateAngebotPDF(quote, items, stream) {
   const delivEnd = renderAddrCol(deliv, c2, cW * 0.44);
   y = Math.max(billEnd, delivEnd) + 20;
 
-  // ════ META ═══════════════════════════════════════════════════════════════════
+  // ════ META ═══════════════════════════════════════════════════════════════
   const meta = [];
   if (quote.order_number)  meta.push(['BESTELLNR.', quote.order_number]);
   if (quote.cost_center)   meta.push(['KOSTENSTELLE', quote.cost_center]);
@@ -125,7 +148,7 @@ function generateAngebotPDF(quote, items, stream) {
   });
   y += 48;
 
-  // ════ ANGEBOT-TITEL + FREITEXT (zentriert) ═══════════════════════════════════
+  // ════ ANGEBOT-TITEL ══════════════════════════════════════════════════════
   doc.fillColor(C.gold).font('Helvetica-Bold').fontSize(26)
      .text('ANGEBOT', mL, y, { width: cW, align: 'center', lineBreak: false });
   y += 36;
@@ -141,16 +164,16 @@ function generateAngebotPDF(quote, items, stream) {
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 16;
 
-  // ════ TABELLE ════════════════════════════════════════════════════════════════
+  // ════ TABELLE ════════════════════════════════════════════════════════════
   y = drawTableHeader(doc, y);
 
   let totalNetto = 0;
 
   items.forEach((item, idx) => {
     if (y + ROW_H > PAGE_BOTTOM) {
-      drawFooter(doc);
+      drawFooter(doc, company);
       doc.addPage();
-      y = drawContinuationHeader(doc, quote);
+      y = drawContinuationHeader(doc, quote, company);
       y = drawTableHeader(doc, y);
     }
 
@@ -171,14 +194,14 @@ function generateAngebotPDF(quote, items, stream) {
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 18;
 
-  // ════ SUMMEN ═════════════════════════════════════════════════════════════════
+  // ════ SUMMEN ═════════════════════════════════════════════════════════════
   if (y + TOTALS_SPACE > PAGE_BOTTOM) {
-    drawFooter(doc);
+    drawFooter(doc, company);
     doc.addPage();
-    y = drawContinuationHeader(doc, quote);
+    y = drawContinuationHeader(doc, quote, company);
   }
 
-  const ust         = totalNetto * 0.07;
+  const ust         = totalNetto * vatRate;
   const totalBrutto = totalNetto + ust;
   const sumValX     = tG;
   const sumValW     = tR - tG - 4;
@@ -190,7 +213,7 @@ function generateAngebotPDF(quote, items, stream) {
   y += 17;
 
   doc.fillColor(C.gray).font('Helvetica').fontSize(9)
-     .text('+ 7 % USt', tE, y, { lineBreak: false });
+     .text(`+ ${vatLabel} USt`, tE, y, { lineBreak: false });
   doc.fillColor(C.dark).font('Helvetica').fontSize(9)
      .text(EUR(ust), sumValX, y, { width: sumValW, align: 'right', lineBreak: false });
   y += 14;
@@ -205,7 +228,7 @@ function generateAngebotPDF(quote, items, stream) {
      .text(EUR(totalBrutto), sumValX, y - 2, { width: sumValW, align: 'right', lineBreak: false });
   y += 38;
 
-  // ════ HINWEIS ═════════════════════════════════════════════════════════════════
+  // ════ HINWEIS ═════════════════════════════════════════════════════════════
   doc.rect(mL, y, cW, 1).fill(C.border);
   y += 14;
 
@@ -218,7 +241,7 @@ function generateAngebotPDF(quote, items, stream) {
        .text(`Gültig bis: ${fmtDate(quote.valid_until)}`, mL, y, { lineBreak: false });
   }
 
-  drawFooter(doc);
+  drawFooter(doc, company);
   doc.end();
 }
 
