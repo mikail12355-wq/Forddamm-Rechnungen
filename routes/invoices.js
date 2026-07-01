@@ -90,6 +90,7 @@ router.get('/export', w(async (req, res) => {
 // ─── NEUE RECHNUNG ────────────────────────────────────────────────────────────
 router.get('/neu', w(async (req, res) => {
   const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
   const [custRes, artRes, lastRes, pricesRes] = await Promise.all([
     db.execute('SELECT * FROM customers ORDER BY name'),
     db.execute('SELECT * FROM articles WHERE active = 1 ORDER BY name'),
@@ -101,18 +102,38 @@ router.get('/neu', w(async (req, res) => {
   res.render('invoices/new', {
     title: 'Neue Rechnung', customers: custRes.rows, articles: artRes.rows,
     nextNumber, today, editInvoice: null, editItems: [],
-    customerPricesMap: buildPricesMap(pricesRes.rows)
+    customerPricesMap: buildPricesMap(pricesRes.rows), vatRate
   });
 }));
 
 router.post('/neu', w(async (req, res) => {
   const db = req.db;
-  const { invoice_number, date, delivery_from, delivery_to, customer_id,
+  const { invoice_number, date, delivery_from, delivery_to,
           order_number, notes, delivery_contact, cost_center, item_name, item_qty, item_price,
-          payment_method } = req.body;
+          payment_method, customer_mode,
+          manual_name, manual_street, manual_zip, manual_city } = req.body;
+  let { customer_id } = req.body;
 
-  if (!invoice_number || !date || !customer_id) {
+  if (!invoice_number || !date) {
     req.flash('error', 'Bitte alle Pflichtfelder ausfüllen.');
+    return res.redirect('/rechnungen/neu');
+  }
+
+  // Manuell eingegebenen Kunden anlegen
+  if (customer_mode === 'manual') {
+    if (!manual_name?.trim()) {
+      req.flash('error', 'Bitte einen Kundennamen eingeben.');
+      return res.redirect('/rechnungen/neu');
+    }
+    const r = await db.execute(
+      `INSERT INTO customers (name, billing_street, billing_zip, billing_city) VALUES (?, ?, ?, ?)`,
+      [manual_name.trim(), manual_street?.trim() || '', manual_zip?.trim() || '', manual_city?.trim() || '']
+    );
+    customer_id = Number(r.lastInsertRowid);
+  }
+
+  if (!customer_id) {
+    req.flash('error', 'Bitte einen Kunden auswählen oder manuell eingeben.');
     return res.redirect('/rechnungen/neu');
   }
   const existing = await db.execute('SELECT id FROM invoices WHERE invoice_number = ?', [+invoice_number]);
@@ -184,6 +205,7 @@ router.get('/:id/pdf', w(async (req, res) => {
 
 router.get('/:id/bearbeiten', w(async (req, res) => {
   const db = req.db;
+  const vatRate = req.session.user?.company?.vat_rate ?? 0.07;
   const invRes = await db.execute(`
     SELECT i.*, c.name as customer_name FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
@@ -201,7 +223,7 @@ router.get('/:id/bearbeiten', w(async (req, res) => {
     title: 'Rechnung bearbeiten', customers: custRes.rows, articles: artRes.rows,
     nextNumber: invoice.invoice_number, today: invoice.date,
     editInvoice: invoice, editItems: itemsRes.rows,
-    customerPricesMap: buildPricesMap(pricesRes.rows)
+    customerPricesMap: buildPricesMap(pricesRes.rows), vatRate
   });
 }));
 

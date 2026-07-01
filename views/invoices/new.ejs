@@ -69,25 +69,69 @@
   <!-- CUSTOMER -->
   <div class="card">
     <h3 class="card-title">Kunde <span class="required">*</span></h3>
-    <div class="form-group" style="max-width:380px">
-      <label>Kunde auswählen</label>
-      <select name="customer_id" id="customer-select" required>
-        <option value="">— Bitte wählen —</option>
-        <% customers.forEach(c => { %>
-          <option value="<%= c.id %>"
-            data-billing="<%= c.billing_street %>, <%= c.billing_zip %> <%= c.billing_city %>"
-            data-delivery="<%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
-            data-costcenter="<%= c.cost_center %>"
-            <%= (editInvoice && editInvoice.customer_id == c.id) ? 'selected' : '' %>>
-            <%= c.name %>
-          </option>
-        <% }) %>
-      </select>
+
+    <!-- Toggle: Liste / Manuell -->
+    <div class="delivery-toggle" style="margin-bottom:16px">
+      <label class="toggle-option">
+        <input type="radio" name="customer_mode" value="list" id="mode-list"
+               onchange="toggleCustomerMode('list')"
+               <%= !editInvoice || editInvoice.customer_id ? 'checked' : '' %> />
+        Aus Kundenliste
+      </label>
+      <label class="toggle-option">
+        <input type="radio" name="customer_mode" value="manual" id="mode-manual"
+               onchange="toggleCustomerMode('manual')" />
+        Manuell eingeben
+      </label>
     </div>
-    <div id="customer-preview" class="customer-preview" style="display:none">
-      <div><strong>Rechnungsadresse:</strong> <span id="preview-billing"></span></div>
-      <div><strong>Lieferadresse:</strong> <span id="preview-delivery"></span></div>
+
+    <!-- Aus Liste -->
+    <div id="customer-list-section">
+      <div class="form-group" style="max-width:380px">
+        <label>Kunde auswählen</label>
+        <select name="customer_id" id="customer-select">
+          <option value="">— Bitte wählen —</option>
+          <% customers.forEach(c => { %>
+            <option value="<%= c.id %>"
+              data-billing="<%= c.billing_street %>, <%= c.billing_zip %> <%= c.billing_city %>"
+              data-delivery="<%= c.delivery_street %>, <%= c.delivery_zip %> <%= c.delivery_city %>"
+              data-costcenter="<%= c.cost_center %>"
+              <%= (editInvoice && editInvoice.customer_id == c.id) ? 'selected' : '' %>>
+              <%= c.name %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div id="customer-preview" class="customer-preview" style="display:none">
+        <div><strong>Rechnungsadresse:</strong> <span id="preview-billing"></span></div>
+        <div><strong>Lieferadresse:</strong> <span id="preview-delivery"></span></div>
+      </div>
+      <a href="/kunden/neu" target="_blank" class="link" style="font-size:0.85rem;display:inline-block;margin-top:8px">+ Neuen Kunden anlegen</a>
     </div>
+
+    <!-- Manuell -->
+    <div id="customer-manual-section" style="display:none">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Name / Firma <span class="required">*</span></label>
+          <input type="text" name="manual_name" id="manual-name" placeholder="z.B. Max Mustermann" />
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Straße</label>
+          <input type="text" name="manual_street" placeholder="z.B. Musterstraße 1" />
+        </div>
+        <div class="form-group">
+          <label>PLZ</label>
+          <input type="text" name="manual_zip" placeholder="12345" style="max-width:120px" />
+        </div>
+        <div class="form-group">
+          <label>Stadt</label>
+          <input type="text" name="manual_city" placeholder="Berlin" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Gemeinsame Felder -->
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
       <div class="form-group" style="max-width:320px;flex:1">
         <label>Ansprechpartner <span style="color:var(--mid);font-weight:400">(optional)</span></label>
@@ -102,7 +146,6 @@
                placeholder="z.B. GS Berlin 1010102002" />
       </div>
     </div>
-    <a href="/kunden/neu" target="_blank" class="link" style="font-size:0.85rem">+ Neuen Kunden anlegen</a>
   </div>
 
   <!-- ITEMS -->
@@ -120,7 +163,7 @@
 
     <div class="totals-preview">
       <div class="totals-row"><span>Gesamtbetrag netto</span><span id="total-netto">0,00 €</span></div>
-      <div class="totals-row"><span>+ 7% USt</span><span id="total-ust">0,00 €</span></div>
+      <div class="totals-row"><span>+ <%= Math.round((vatRate || 0.07) * 100) %> % USt</span><span id="total-ust">0,00 €</span></div>
       <div class="totals-row totals-final"><span>Gesamtbetrag brutto</span><span id="total-brutto">0,00 €</span></div>
     </div>
   </div>
@@ -143,6 +186,24 @@
 const ARTICLES = <%- JSON.stringify(articles.map(a => ({ id: a.id, name: a.name, price: a.unit_price }))) %>;
 const SEED_ITEMS = <%- JSON.stringify(typeof editItems !== 'undefined' ? editItems : []) %>;
 const CUSTOMER_PRICES = <%- JSON.stringify(customerPricesMap || {}) %>;
+const VAT_RATE = <%= vatRate || 0.07 %>;
+
+function toggleCustomerMode(mode) {
+  const listSection   = document.getElementById('customer-list-section');
+  const manualSection = document.getElementById('customer-manual-section');
+  const select        = document.getElementById('customer-select');
+  const manualName    = document.getElementById('manual-name');
+  if (mode === 'manual') {
+    listSection.style.display   = 'none';
+    manualSection.style.display = 'block';
+    select.removeAttribute('required');
+    if (manualName) manualName.setAttribute('required', '');
+  } else {
+    listSection.style.display   = 'block';
+    manualSection.style.display = 'none';
+    if (manualName) manualName.removeAttribute('required');
+  }
+}
 
 function toggleDelivery(type) {
   document.getElementById('delivery-day').style.display   = type === 'day'   ? 'block' : 'none';
