@@ -31,6 +31,7 @@ document.querySelectorAll('.flash').forEach(el => {
 
   // ── Totals ──────────────────────────────────────────────────────────
   const formatEUR = (n) => isNaN(n) ? '—' : n.toFixed(2).replace('.', ',') + ' €';
+  const vatRate = (typeof VAT_RATE !== 'undefined') ? VAT_RATE : 0.07;
 
   const updateTotals = () => {
     let netto = 0;
@@ -41,7 +42,7 @@ document.querySelectorAll('.flash').forEach(el => {
       row.querySelector('.item-total').textContent = formatEUR(total);
       netto += total;
     });
-    const ust    = netto * 0.07;
+    const ust    = netto * vatRate;
     const brutto = netto + ust;
     document.getElementById('total-netto').textContent  = formatEUR(netto);
     document.getElementById('total-ust').textContent    = formatEUR(ust);
@@ -119,18 +120,24 @@ document.querySelectorAll('.flash').forEach(el => {
     showPreview();
   }
 
+  // Wenn keine Artikel im Stamm: immer direkt Textfeld anzeigen
+  const noArticles = typeof ARTICLES === 'undefined' || ARTICLES.length === 0;
+
   // ── Add row ──────────────────────────────────────────────────────────
   const addRow = (name = '', qty = 1, price = '') => {
     const row = document.createElement('div');
     row.className = 'item-row';
 
     const priceFormatted = price !== '' ? parseFloat(price).toFixed(2).replace('.', ',') : '';
+    const isCustomName   = name && !(typeof ARTICLES !== 'undefined' && ARTICLES.find(a => a.name === name));
+    const showNameInput  = noArticles || isCustomName;
 
     row.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:4px">
-        <select class="article-select">${buildArticleOptions(name)}</select>
+        ${noArticles ? '' : `<select class="article-select">${buildArticleOptions(name)}</select>`}
         <input type="text" name="item_name" class="inp-name" value="${escHtml(name)}"
-               placeholder="Artikelname" required style="display:${name && !(typeof ARTICLES !== 'undefined' && ARTICLES.find(a => a.name === name)) ? '' : 'none'}" />
+               placeholder="z.B. Hose kürzen" required
+               style="display:${showNameInput ? 'block' : 'none'}" />
       </div>
       <input type="number" name="item_qty"   class="inp-qty"   value="${qty}" min="0.5" step="0.5" required />
       <input type="text"   name="item_price" class="inp-price" value="${priceFormatted}" placeholder="0,00" required />
@@ -143,29 +150,32 @@ document.querySelectorAll('.flash').forEach(el => {
     const priceInput = row.querySelector('.inp-price');
     const qtyInput   = row.querySelector('.inp-qty');
 
-    select.addEventListener('change', () => {
-      const opt = select.options[select.selectedIndex];
-      if (opt.value === '__custom__') {
-        nameInput.style.display = '';
-        nameInput.value = '';
-        nameInput.focus();
-        priceInput.value = '';
-      } else if (opt.value) {
-        nameInput.style.display = 'none';
-        nameInput.value = opt.value;
-        priceInput.value = parseFloat(opt.dataset.price).toFixed(2).replace('.', ',');
-      } else {
-        nameInput.style.display = 'none';
-        nameInput.value = '';
-        priceInput.value = '';
-      }
-      updateTotals();
-    });
+    if (select) {
+      select.addEventListener('change', () => {
+        const opt = select.options[select.selectedIndex];
+        if (opt.value === '__custom__') {
+          nameInput.style.display = 'block';
+          nameInput.value = '';
+          nameInput.focus();
+          priceInput.value = '';
+        } else if (opt.value) {
+          nameInput.style.display = 'none';
+          nameInput.value = opt.value;
+          priceInput.value = parseFloat(opt.dataset.price).toFixed(2).replace('.', ',');
+        } else {
+          nameInput.style.display = 'none';
+          nameInput.value = '';
+          priceInput.value = '';
+        }
+        updateTotals();
+      });
+    }
 
     [priceInput, qtyInput, nameInput].forEach(el => el.addEventListener('input', updateTotals));
     row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateTotals(); });
 
     container.appendChild(row);
+    if (noArticles && !name) nameInput?.focus();
     updateTotals();
   };
 
